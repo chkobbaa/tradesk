@@ -7,7 +7,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { Candle, Timeframe } from '@/core/market/types';
 
-const BINANCE_WS = 'wss://stream.binance.com:9443/ws';
+const BINANCE_WS = 'wss://stream.binance.us:9443/ws';
 
 const TIMEFRAME_MAP: Record<Timeframe, string> = {
     '1m': '1m',
