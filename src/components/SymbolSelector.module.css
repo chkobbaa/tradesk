@@ -1,0 +1,19 @@
+.wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.select {
+    padding-right: 28px !important;
+    min-width: 160px;
+    font-weight: 600;
+}
+
+.chevron {
+    position: absolute;
+    right: 10px;
+    pointer-events: none;
+    color: var(--text-muted);
+    font-size: 12px;
+}

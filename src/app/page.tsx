@@ -1,66 +1,143 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+'use client';
 
-export default function Home() {
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Candle, MarketSymbol, Timeframe } from '@/core/market/types';
+import CandleTable from '@/components/CandleTable';
+import TimeframeSelector from '@/components/TimeframeSelector';
+import SymbolSelector from '@/components/SymbolSelector';
+import MarketOverview from '@/components/MarketOverview';
+import styles from './page.module.css';
+
+export default function Dashboard() {
+  const [symbols, setSymbols] = useState<MarketSymbol[]>([]);
+  const [symbol, setSymbol] = useState('BTCUSDT');
+  const [timeframe, setTimeframe] = useState<Timeframe>('1h');
+  const [candles, setCandles] = useState<Candle[]>([]);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const isFirstLoad = useRef(true);
+
+  // Fetch symbols on mount
+  useEffect(() => {
+    fetch('/api/symbols')
+      .then(res => res.json())
+      .then((data: MarketSymbol[]) => {
+        if (Array.isArray(data)) setSymbols(data);
+      })
+      .catch(err => console.error('Failed to fetch symbols:', err));
+  }, []);
+
+  // Fetch candles — silent update (no loading flash)
+  const fetchCandleData = useCallback(async () => {
+    if (isFirstLoad.current) {
+      setInitialLoading(true);
+    }
+    setError(null);
+
+    try {
+      const res = await fetch(
+        `/api/candles?symbol=${symbol}&timeframe=${timeframe}&limit=100`
+      );
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to fetch candles');
+      }
+
+      setCandles(data);
+      setLastUpdate(new Date());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setInitialLoading(false);
+      isFirstLoad.current = false;
+    }
+  }, [symbol, timeframe]);
+
+  // Reset first load on symbol/timeframe change
+  useEffect(() => {
+    isFirstLoad.current = true;
+    fetchCandleData();
+  }, [fetchCandleData]);
+
+  // Auto-refresh
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(fetchCandleData, 30_000);
+    return () => clearInterval(interval);
+  }, [autoRefresh, fetchCandleData]);
+
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>To get started, edit the page.tsx file.</h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <div className={styles.dashboard}>
+      <header className={styles.header}>
+        <div>
+          <h1 className={styles.title}>Market Data</h1>
+          <p className={styles.subtitle}>
+            Live OHLCV candle data · Binance
           </p>
         </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+        {lastUpdate && (
+          <span className={styles.lastUpdate}>
+            Last update: {lastUpdate.toLocaleTimeString('en-US', { hour12: false })}
+          </span>
+        )}
+      </header>
+
+      {/* Controls */}
+      <div className={styles.controls}>
+        <div className="control-bar">
+          <SymbolSelector symbols={symbols} value={symbol} onChange={setSymbol} />
+          <TimeframeSelector value={timeframe} onChange={setTimeframe} />
+          <button onClick={fetchCandleData}>↻ Refresh</button>
+          <button
+            onClick={() => setAutoRefresh(!autoRefresh)}
+            className={autoRefresh ? 'btn-primary' : ''}
           >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            {autoRefresh ? '● Auto' : '○ Auto'}
+          </button>
         </div>
-      </main>
+      </div>
+
+      {/* Market overview */}
+      {candles.length > 0 && (
+        <MarketOverview candles={candles} symbol={symbol} />
+      )}
+
+      {/* Error state */}
+      {error && (
+        <div className="error-container">
+          <strong>Error:</strong> {error}
+          <br />
+          <button onClick={fetchCandleData} style={{ marginTop: 8 }}>
+            Try Again
+          </button>
+        </div>
+      )}
+
+      {/* Loading state — only on first load */}
+      {initialLoading && candles.length === 0 && (
+        <div className="loading-container">
+          <div className="spinner" />
+          Fetching market data...
+        </div>
+      )}
+
+      {/* Candle table */}
+      {candles.length > 0 && (
+        <div className="card" style={{ marginTop: 'var(--space-md)' }}>
+          <div className="card-header">
+            <h2>
+              {symbol} — {timeframe.toUpperCase()} Candles
+            </h2>
+            <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+              {candles.length} candles
+            </span>
+          </div>
+          <CandleTable candles={candles} timeframe={timeframe} />
+        </div>
+      )}
     </div>
   );
 }

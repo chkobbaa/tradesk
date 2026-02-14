@@ -1,0 +1,100 @@
+.chartCard {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    transition: all 200ms ease;
+}
+
+/* Fullscreen mode */
+.fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+    border-radius: 0;
+    border: none;
+}
+
+.chartHeader {
+    padding: var(--space-sm) var(--space-lg);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.chartTitle {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.symbolBadge {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-accent);
+    background: var(--color-accent-bg);
+    border: 1px solid var(--color-accent-border);
+    padding: 2px var(--space-sm);
+    border-radius: 4px;
+    font-family: var(--font-mono);
+}
+
+.chartType {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.indicatorCount {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.positionCount {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--color-accent);
+    background: var(--color-accent-bg);
+    border: 1px solid var(--color-accent-border);
+    padding: 1px 6px;
+    border-radius: var(--radius-full);
+}
+
+.chartActions {
+    display: flex;
+    gap: 4px;
+}
+
+.actionBtn {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 100ms ease;
+}
+
+.actionBtn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.chartContainer {
+    width: 100%;
+    position: relative;
+}
+
+/* Ensure lightweight-charts canvas fills width */
+.chartContainer>div {
+    width: 100% !important;
+}

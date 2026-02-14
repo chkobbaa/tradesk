@@ -1,0 +1,149 @@
+.page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.title {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+}
+
+.subtitle {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+/* ─── Summary Cards ─────────────────────────────── */
+.cardGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: var(--space-sm);
+}
+
+.card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.cardLabel {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.cardValue {
+    font-size: 20px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--text-primary);
+}
+
+.green {
+    color: var(--color-bull) !important;
+}
+
+.red {
+    color: var(--color-bear) !important;
+}
+
+/* ─── Chart Sections ────────────────────────────── */
+.chartSection {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.sectionTitle {
+    font-size: 14px;
+    font-weight: 600;
+    padding: var(--space-md) var(--space-lg);
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.chartContainer {
+    width: 100%;
+}
+
+.chartContainer>div {
+    width: 100% !important;
+}
+
+.emptyChart {
+    padding: var(--space-xl) var(--space-lg);
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+/* ─── Table ─────────────────────────────────────── */
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.table th {
+    text-align: left;
+    padding: var(--space-sm) var(--space-md);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--text-muted);
+    font-weight: 600;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.table td {
+    padding: var(--space-sm) var(--space-md);
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.table tr:last-child td {
+    border-bottom: none;
+}
+
+.mono {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: var(--color-accent);
+}
+
+/* ─── Empty State ───────────────────────────────── */
+.emptyState {
+    text-align: center;
+    padding: var(--space-xl);
+    color: var(--text-muted);
+}
+
+.emptyState p:first-child {
+    font-size: 24px;
+    margin-bottom: var(--space-sm);
+}
+
+.emptyHint {
+    font-size: 13px;
+}
+
+.emptyHint a {
+    color: var(--color-accent);
+    text-decoration: underline;
+}

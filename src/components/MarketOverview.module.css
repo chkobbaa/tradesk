@@ -1,0 +1,75 @@
+.overview {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-lg);
+    padding: var(--space-lg);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    flex-wrap: wrap;
+}
+
+.priceBlock {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+.symbolLabel {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.price {
+    font-size: 28px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    letter-spacing: -0.5px;
+}
+
+.bull {
+    color: var(--color-bull);
+}
+
+.bear {
+    color: var(--color-bear);
+}
+
+.stats {
+    display: flex;
+    gap: var(--space-xl);
+}
+
+.stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.statLabel {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+}
+
+.statValue {
+    font-size: 14px;
+    font-family: var(--font-mono);
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+@media (max-width: 768px) {
+    .overview {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .stats {
+        gap: var(--space-lg);
+        flex-wrap: wrap;
+    }
+}

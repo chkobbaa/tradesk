@@ -1,0 +1,169 @@
+.panel {
+    background: #1e1e24;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 1rem;
+    color: #eee;
+    font-family: 'Inter', sans-serif;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    min-width: 300px;
+}
+
+.header {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-bottom: 1px solid #333;
+    padding-bottom: 0.5rem;
+}
+
+.decisionCard {
+    background: #111;
+    border: 1px solid #444;
+    border-radius: 6px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.decisionTitle {
+    font-size: 0.7rem;
+    color: #888;
+    text-transform: uppercase;
+}
+
+.decisionRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.decisionAction {
+    font-size: 1.5rem;
+    font-weight: 800;
+}
+
+.decisionScore {
+    font-family: monospace;
+    color: #ccc;
+    font-size: 1rem;
+}
+
+.decisionReason {
+    font-size: 0.8rem;
+    color: #aaa;
+    border-top: 1px solid #333;
+    padding-top: 0.5rem;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0.8rem;
+}
+
+.card {
+    background: #25252b;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 0.8rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.cardHeader {
+    font-size: 0.75rem;
+    color: #aaa;
+    display: flex;
+    justify-content: space-between;
+}
+
+.cardValue {
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.long {
+    color: #22c55e;
+}
+
+.short {
+    color: #ef4444;
+}
+
+.neutral {
+    color: #9ca3af;
+}
+
+.confidence {
+    font-size: 0.7rem;
+    color: #666;
+    margin-top: auto;
+}
+
+.reason {
+    font-size: 0.7rem;
+    color: #888;
+    margin-top: 0.2rem;
+    line-height: 1.2;
+}
+
+/* Macro Toggle */
+.macroSection {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid #333;
+}
+
+.macroTitle {
+    font-size: 0.75rem;
+    color: #888;
+}
+
+.toggles {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.toggleBtn {
+    flex: 1;
+    padding: 0.5rem;
+    background: #2a2a30;
+    border: 1px solid #444;
+    color: #888;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    transition: all 0.2s;
+}
+
+.toggleBtn:hover {
+    background: #333;
+}
+
+.activeLong {
+    background: rgba(34, 197, 94, 0.2);
+    border-color: #22c55e;
+    color: #22c55e;
+}
+
+.activeShort {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: #ef4444;
+    color: #ef4444;
+}
+
+.activeNeutral {
+    background: rgba(156, 163, 175, 0.2);
+    border-color: #9ca3af;
+    color: #9ca3af;
+}
