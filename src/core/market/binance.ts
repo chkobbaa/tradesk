@@ -5,7 +5,7 @@
 
 import { Candle, CandleRequest, MarketError, MarketSymbol, Timeframe } from './types';
 
-const BINANCE_BASE = 'https://api.binance.com';
+const BINANCE_BASE = 'https://api.binance.us';
 
 // Top symbols to show by default (curated for relevance)
 const TOP_SYMBOLS = [
