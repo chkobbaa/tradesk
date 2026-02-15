@@ -27,6 +27,14 @@ interface CandleChartProps {
     positions?: Position[];
     isFullscreen?: boolean;
     onToggleFullscreen?: () => void;
+    decisions?: ChartDecision[];
+}
+
+export interface ChartDecision {
+    timestamp: number;
+    action: string;
+    executed: boolean;
+    reason?: string;
 }
 
 function toCandlestickData(candles: Candle[]): CandlestickData<Time>[] {
@@ -75,6 +83,7 @@ export default function CandleChart({
     positions = [],
     isFullscreen = false,
     onToggleFullscreen,
+    decisions = [],
 }: CandleChartProps) {
     const chartContainerRef = useRef<HTMLDivElement>(null);
     const chartRef = useRef<IChartApi | null>(null);
@@ -276,6 +285,53 @@ export default function CandleChart({
             }
         }
     }, [positions]);
+
+    // ─── Decision Markers ─────────────────────────────────────────
+    useEffect(() => {
+        if (!candleSeriesRef.current) return;
+        if (!decisions || decisions.length === 0) {
+            (candleSeriesRef.current as any).setMarkers([]);
+            return;
+        }
+
+        const markers: import('lightweight-charts').SeriesMarker<Time>[] = decisions
+            .filter(d => d.action !== 'HOLD') // Only show actionable decisions (or customize toggle later)
+            .map(d => {
+                const time = (d.timestamp / 1000) as Time;
+                // Determine marker type and color based on action
+                let color = '#ccc';
+                let shape: import('lightweight-charts').SeriesMarkerShape = 'circle';
+                let position: import('lightweight-charts').SeriesMarkerPosition = 'aboveBar';
+                let text = d.action;
+
+                if (d.action === 'BUY') {
+                    color = '#00d26a';
+                    shape = 'arrowUp';
+                    position = 'belowBar';
+                } else if (d.action === 'SELL') {
+                    color = '#ff4757';
+                    shape = 'arrowDown';
+                    position = 'aboveBar';
+                } else if (d.action.includes('CLOSE')) {
+                    color = '#f0b429';
+                    shape = 'square';
+                    position = 'aboveBar';
+                    text = '✖';
+                }
+
+                return {
+                    time,
+                    position,
+                    shape,
+                    color,
+                    text: d.action === 'BUY' || d.action === 'SELL' ? d.action : text,
+                };
+            })
+            // Sort by time is required by lightweight-charts
+            .sort((a, b) => (a.time as number) - (b.time as number));
+
+        (candleSeriesRef.current as any).setMarkers(markers);
+    }, [decisions]);
 
     // Indicator series rendering
     useEffect(() => {

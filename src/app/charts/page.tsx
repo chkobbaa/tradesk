@@ -13,7 +13,7 @@ import {
     closePosition,
     checkStopLossTakeProfit,
 } from '@/core/trading';
-import CandleChart from '@/components/CandleChart';
+import CandleChart, { ChartDecision } from '@/components/CandleChart';
 import TimeframeSelector from '@/components/TimeframeSelector';
 import SymbolSelector from '@/components/SymbolSelector';
 import MarketOverview from '@/components/MarketOverview';
@@ -79,6 +79,8 @@ export default function ChartsPage() {
     const isFirstLoad = useRef(true);
     const portfolioLoaded = useRef(false);
     const [lastClosedCandle, setLastClosedCandle] = useState<Candle | null>(null);
+    const [decisions, setDecisions] = useState<ChartDecision[]>([]);
+    const [showDecisions, setShowDecisions] = useState(false);
 
     // Load portfolio from server on mount
     useEffect(() => {
@@ -136,6 +138,20 @@ export default function ChartsPage() {
             })
             .catch(err => console.error('Failed to fetch symbols:', err));
     }, []);
+
+    // Fetch shadow decisions for visualization
+    useEffect(() => {
+        if (!showDecisions) return;
+        fetch('/api/shadow/decisions?limit=500')
+            .then(res => res.json())
+            .then(data => {
+                if (Array.isArray(data)) {
+                    const filtered = data.filter((d: any) => d.symbol === symbol);
+                    setDecisions(filtered);
+                }
+            })
+            .catch(err => console.error('Failed to fetch decisions:', err));
+    }, [showDecisions, symbol]);
 
     // Fetch candle history
     const fetchCandleData = useCallback(async () => {
@@ -275,6 +291,14 @@ export default function ChartsPage() {
                     <SymbolSelector symbols={symbols} value={symbol} onChange={setSymbol} />
                     <TimeframeSelector value={timeframe} onChange={setTimeframe} />
                     <button onClick={fetchCandleData}>↻ Refresh</button>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer', userSelect: 'none', marginLeft: 12 }}>
+                        <input
+                            type="checkbox"
+                            checked={showDecisions}
+                            onChange={e => setShowDecisions(e.target.checked)}
+                        />
+                        Show Bot Decisions
+                    </label>
                 </div>
             </div>
 
@@ -315,6 +339,7 @@ export default function ChartsPage() {
                             positions={portfolio.positions.filter(p => p.symbol === symbol)}
                             isFullscreen={isFullscreen}
                             onToggleFullscreen={() => setIsFullscreen(f => !f)}
+                            decisions={showDecisions ? decisions : []}
                         />
                         <div style={{ marginTop: '1rem' }}>
                             <SignalPanel

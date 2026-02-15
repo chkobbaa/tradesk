@@ -19,13 +19,16 @@ export async function GET() {
             ? RegimeLabeler.label(candles)
             : { label: 'UNCLEAR', reason: 'No candle data', confidence: 0 };
 
+        const currentPrice = candles.length > 0 ? candles[candles.length - 1].close : 0;
+
         return NextResponse.json({
             stats,
             equity,
-            recentTrades: trades.slice(0, 20),
+            recentTrades: trades.slice(0, 50),
             portfolio,
             decisions,
             regime,
+            currentPrice,
         });
     } catch (err) {
         return NextResponse.json(

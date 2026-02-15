@@ -43,6 +43,7 @@ interface ShadowData {
     portfolio: { balance: number; positions: Position[] };
     decisions: Decision[];
     regime?: RegimeData;
+    currentPrice?: number;
 }
 
 function timeAgo(ts: number): string {
@@ -219,6 +220,7 @@ export default function MobilePage() {
     const decisions = data?.decisions || [];
     const regime = data?.regime;
     const positions = portfolio?.positions || [];
+    const currentPrice = data?.currentPrice || 0;
     // If we have positions, we might want to default to showing them, but let's stick to list view
     const startBalance = 10000;
     const balance = portfolio?.balance ?? startBalance;
@@ -412,6 +414,18 @@ export default function MobilePage() {
                                                         <span className={styles.posDetailLabel}>Held</span>
                                                         <span>{timeAgo(pos.openTime)}</span>
                                                     </div>
+                                                    {currentPrice > 0 && (
+                                                        <div className={styles.posDetail} style={{ width: '100%', marginTop: 4, display: 'flex', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 4 }}>
+                                                            <span className={styles.posDetailLabel}>Live P&L</span>
+                                                            <span className={((currentPrice - pos.entryPrice) * (pos.side === 'LONG' ? 1 : -1)) >= 0 ? styles.green : styles.red}>
+                                                                {((currentPrice - pos.entryPrice) * pos.quantity * (pos.side === 'LONG' ? 1 : -1) >= 0 ? '+' : '')}
+                                                                ${((currentPrice - pos.entryPrice) * pos.quantity * (pos.side === 'LONG' ? 1 : -1)).toFixed(2)}
+                                                                {' ('}
+                                                                {((currentPrice - pos.entryPrice) / pos.entryPrice * 100 * (pos.side === 'LONG' ? 1 : -1) >= 0 ? '+' : '')}
+                                                                {((currentPrice - pos.entryPrice) / pos.entryPrice * 100 * (pos.side === 'LONG' ? 1 : -1)).toFixed(2)}%)
+                                                            </span>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         </li>
@@ -513,34 +527,41 @@ export default function MobilePage() {
                         {recentTrades.length === 0 ? (
                             <div className={styles.emptyTrades}>No trades yet</div>
                         ) : (
-                            <ul className={styles.tradesList}>
-                                {recentTrades.map((trade: Trade) => (
-                                    <li key={trade.id} className={styles.tradeItem}>
-                                        <div className={styles.tradeLeft}>
-                                            <span className={styles.tradeSymbol}>{trade.symbol}</span>
-                                            <span className={styles.tradeMeta}>
-                                                <span className={`${styles.tradeSide} ${trade.side === 'LONG' ? styles.green : styles.red}`}>
-                                                    {trade.side}
+                            <div className={styles.tradesContainer}>
+                                <div className={styles.tradesTableHeader} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.5fr', padding: '8px 12px', color: '#6b7280', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    <span>Result</span>
+                                    <span style={{ textAlign: 'center' }}>Details</span>
+                                    <span style={{ textAlign: 'right' }}>PnL</span>
+                                </div>
+                                <ul className={styles.tradesList}>
+                                    {recentTrades.map((trade: Trade) => (
+                                        <li key={trade.id} className={styles.tradeItem}>
+                                            <div className={styles.tradeLeft}>
+                                                <span className={styles.tradeSymbol}>{trade.symbol}</span>
+                                                <span className={styles.tradeMeta}>
+                                                    <span className={`${styles.tradeSide} ${trade.side === 'LONG' ? styles.green : styles.red}`}>
+                                                        {trade.side}
+                                                    </span>
+                                                    <span>{trade.quantity.toFixed(4)}</span>
                                                 </span>
-                                                <span>{trade.quantity.toFixed(4)}</span>
-                                            </span>
-                                            <span className={styles.tradeEntryExit}>
-                                                ${trade.entryPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                                                {' → '}
-                                                ${trade.exitPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                                            </span>
-                                        </div>
-                                        <div className={styles.tradeRight}>
-                                            <div className={`${styles.tradePnl} ${trade.pnl >= 0 ? styles.green : styles.red}`}>
-                                                {trade.pnl >= 0 ? '+' : ''}{trade.pnl.toFixed(2)}
+                                                <span className={styles.tradeEntryExit}>
+                                                    ${trade.entryPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                                    {' → '}
+                                                    ${trade.exitPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                                </span>
                                             </div>
-                                            <div className={styles.tradeDate}>
-                                                {formatSmallDate(trade.closeTime)}
+                                            <div className={styles.tradeRight}>
+                                                <div className={`${styles.tradePnl} ${trade.pnl >= 0 ? styles.green : styles.red}`}>
+                                                    {trade.pnl >= 0 ? '+' : ''}{trade.pnl.toFixed(2)}
+                                                </div>
+                                                <div className={styles.tradeDate}>
+                                                    {formatSmallDate(trade.closeTime)}
+                                                </div>
                                             </div>
-                                        </div>
-                                    </li>
-                                ))}
-                            </ul>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
                         )}
                     </div>
                 )}
