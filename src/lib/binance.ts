@@ -1,7 +1,7 @@
 
 import { Candle, Timeframe } from '@/core/market/types';
 
-const BINANCE_API_URL = 'https://api.binance.us/api/v3';
+const BINANCE_API_URL = 'https://api.binance.com/api/v3';
 
 export async function fetchBinanceCandles(
     symbol: string,
