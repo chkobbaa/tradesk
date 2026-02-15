@@ -237,6 +237,111 @@ export async function loadShadowPortfolioState(): Promise<{ balance: number; pos
     };
 }
 
+// ─── Daily PnL ─────────────────────────────────────────────────
+
+export async function getDailyPnL(table: 'trades' | 'shadow_trades' = 'trades') {
+    const db = await qs();
+    const rs = await db.execute(`
+        SELECT
+            date(close_time / 1000, 'unixepoch') as day,
+            SUM(pnl) as daily_pnl,
+            COUNT(*) as trade_count,
+            SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END) as wins
+        FROM ${table}
+        GROUP BY day
+        ORDER BY day ASC
+    `);
+
+    return rs.rows.map(row => ({
+        day: row.day as string,
+        pnl: Number(row.daily_pnl || 0),
+        trades: Number(row.trade_count || 0),
+        wins: Number(row.wins || 0),
+    }));
+}
+
+// ─── PnL Distribution ─────────────────────────────────────────
+
+export async function getPnLDistribution(table: 'trades' | 'shadow_trades' = 'trades') {
+    const db = await qs();
+    const rs = await db.execute(`SELECT pnl FROM ${table} ORDER BY pnl ASC`);
+
+    const values = rs.rows.map(r => Number(r.pnl));
+    if (values.length === 0) return [];
+
+    const min = Math.floor(values[0]);
+    const max = Math.ceil(values[values.length - 1]);
+    const range = max - min;
+    const bucketCount = Math.min(20, Math.max(5, Math.ceil(values.length / 3)));
+    const bucketSize = range / bucketCount || 1;
+
+    const buckets: { rangeStart: number; rangeEnd: number; count: number }[] = [];
+    for (let i = 0; i < bucketCount; i++) {
+        buckets.push({
+            rangeStart: min + i * bucketSize,
+            rangeEnd: min + (i + 1) * bucketSize,
+            count: 0,
+        });
+    }
+
+    for (const v of values) {
+        const idx = Math.min(bucketCount - 1, Math.floor((v - min) / bucketSize));
+        buckets[idx].count++;
+    }
+
+    return buckets;
+}
+
+// ─── Shadow Trade Stats ───────────────────────────────────────
+
+export async function getShadowTradeStats() {
+    const db = await qs();
+    const rs = await db.execute(`
+        SELECT
+            COUNT(*) as total,
+            SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END) as wins,
+            SUM(CASE WHEN pnl <= 0 THEN 1 ELSE 0 END) as losses,
+            SUM(pnl) as total_pnl,
+            AVG(CASE WHEN pnl > 0 THEN pnl END) as avg_win,
+            AVG(CASE WHEN pnl <= 0 THEN pnl END) as avg_loss,
+            MAX(pnl) as best_trade,
+            MIN(pnl) as worst_trade
+        FROM shadow_trades
+    `);
+
+    const row = rs.rows[0];
+    const total = Number(row.total || 0);
+    const wins = Number(row.wins || 0);
+
+    return {
+        total,
+        wins,
+        losses: Number(row.losses || 0),
+        totalPnL: Number(row.total_pnl || 0),
+        winRate: total > 0 ? (wins / total) * 100 : 0,
+        avgWin: Number(row.avg_win || 0),
+        avgLoss: Number(row.avg_loss || 0),
+        bestTrade: Number(row.best_trade || 0),
+        worstTrade: Number(row.worst_trade || 0),
+    };
+}
+
+// ─── Shadow Equity Curve ──────────────────────────────────────
+
+export async function getShadowEquityCurve(startingBalance: number = 10000) {
+    const db = await qs();
+    const rs = await db.execute('SELECT close_time, pnl FROM shadow_trades ORDER BY close_time ASC');
+
+    let balance = startingBalance;
+    const points: { time: number; balance: number }[] = [];
+
+    for (const row of rs.rows) {
+        balance += Number(row.pnl);
+        points.push({ time: Number(row.close_time), balance });
+    }
+    return points;
+}
+
 // ─── Helpers ───────────────────────────────────────────────────
 
 function rowToTrade(row: any): Trade {

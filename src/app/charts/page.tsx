@@ -118,7 +118,6 @@ export default function ChartsPage() {
     const indicatorOutputs = useMemo(() => {
         if (candles.length === 0) return [];
         return computeAllIndicators(candles, indicators);
-        return computeAllIndicators(candles, indicators);
     }, [candles, indicators]);
 
     // ─── Phase 7: Signals ──────────────────────────────────────

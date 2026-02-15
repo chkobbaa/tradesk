@@ -183,7 +183,7 @@ export default function StatsPage() {
             </header>
 
             {/* Summary Cards */}
-            {stats && (
+            {stats && typeof stats.total === 'number' && (
                 <div className={styles.cardGrid}>
                     <div className={styles.card}>
                         <span className={styles.cardLabel}>Total Trades</span>
@@ -192,13 +192,13 @@ export default function StatsPage() {
                     <div className={styles.card}>
                         <span className={styles.cardLabel}>Win Rate</span>
                         <span className={`${styles.cardValue} ${stats.winRate >= 50 ? styles.green : styles.red}`}>
-                            {stats.winRate.toFixed(1)}%
+                            {stats.winRate?.toFixed(1) || '0.0'}%
                         </span>
                     </div>
                     <div className={styles.card}>
                         <span className={styles.cardLabel}>Total P&L</span>
                         <span className={`${styles.cardValue} ${stats.totalPnL >= 0 ? styles.green : styles.red}`}>
-                            {stats.totalPnL >= 0 ? '+' : ''}{stats.totalPnL.toFixed(2)}
+                            {stats.totalPnL >= 0 ? '+' : ''}{stats.totalPnL?.toFixed(2) || '0.00'}
                         </span>
                     </div>
                     <div className={styles.card}>
@@ -218,21 +218,21 @@ export default function StatsPage() {
                     <div className={styles.card}>
                         <span className={styles.cardLabel}>Avg Win / Loss</span>
                         <span className={styles.cardValue}>
-                            <span className={styles.green}>+{stats.avgWin.toFixed(2)}</span>
+                            <span className={styles.green}>+{stats.avgWin?.toFixed(2) || '0.00'}</span>
                             {' / '}
-                            <span className={styles.red}>{stats.avgLoss.toFixed(2)}</span>
+                            <span className={styles.red}>{stats.avgLoss?.toFixed(2) || '0.00'}</span>
                         </span>
                     </div>
                     <div className={styles.card}>
                         <span className={styles.cardLabel}>Best Trade</span>
                         <span className={`${styles.cardValue} ${styles.green}`}>
-                            +{stats.bestTrade.toFixed(2)}
+                            +{stats.bestTrade?.toFixed(2) || '0.00'}
                         </span>
                     </div>
                     <div className={styles.card}>
                         <span className={styles.cardLabel}>Worst Trade</span>
                         <span className={`${styles.cardValue} ${styles.red}`}>
-                            {stats.worstTrade.toFixed(2)}
+                            {stats.worstTrade?.toFixed(2) || '0.00'}
                         </span>
                     </div>
                 </div>

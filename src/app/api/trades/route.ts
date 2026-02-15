@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { saveTrade, getTrades, getTradeStats, getEquityCurve, getDrawdownData, getSymbolStats } from '@/db';
+import { saveTrade, getTrades, getTradeStats, getEquityCurve, getDrawdownData, getSymbolStats, getDailyPnL, getPnLDistribution } from '@/db';
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const symbol = searchParams.get('symbol') || undefined;
-    const view = searchParams.get('view'); // 'stats' | 'equity' | 'drawdown' | 'symbols'
+    const view = searchParams.get('view'); // 'stats' | 'equity' | 'drawdown' | 'symbols' | 'daily' | 'distribution'
 
     try {
         if (view === 'stats') {
@@ -18,6 +18,12 @@ export async function GET(req: NextRequest) {
         }
         if (view === 'symbols') {
             return NextResponse.json(await getSymbolStats());
+        }
+        if (view === 'daily') {
+            return NextResponse.json(await getDailyPnL('trades'));
+        }
+        if (view === 'distribution') {
+            return NextResponse.json(await getPnLDistribution('trades'));
         }
 
         const trades = await getTrades(symbol);

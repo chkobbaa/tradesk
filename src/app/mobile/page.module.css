@@ -1,0 +1,435 @@
+.mobileApp {
+    min-height: 100vh;
+    min-height: 100dvh;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    padding-bottom: env(safe-area-inset-bottom, 16px);
+}
+
+/* ─── Header ───────────────────────────────────── */
+.mobileHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--border-color);
+    position: sticky;
+    top: 0;
+    background: var(--bg-primary);
+    z-index: 10;
+    backdrop-filter: blur(12px);
+}
+
+.headerLeft {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.logoDot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--color-accent);
+    box-shadow: 0 0 8px rgba(88, 166, 255, 0.4);
+}
+
+.logoText {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+}
+
+.headerRight {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.liveDot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-bull);
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.3;
+    }
+}
+
+.lastUpdate {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+
+.refreshBtn {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 6px;
+    border-radius: 8px;
+    font-size: 16px;
+    line-height: 1;
+    min-width: 32px;
+    min-height: 32px;
+}
+
+.refreshBtn:active {
+    background: var(--bg-hover);
+}
+
+.refreshSpin {
+    animation: spin 0.7s linear;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ─── Content ──────────────────────────────────── */
+.content {
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* ─── Status Card ──────────────────────────────── */
+.statusCard {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.statusHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.botLabel {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.badgeActive {
+    background: rgba(0, 210, 106, 0.12);
+    color: var(--color-bull);
+    border: 1px solid rgba(0, 210, 106, 0.25);
+}
+
+.badgeIdle {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-muted);
+    border: 1px solid var(--border-color);
+}
+
+/* ─── Balance Section ──────────────────────────── */
+.balanceSection {
+    text-align: center;
+    padding: 8px 0;
+}
+
+.balanceLabel {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+.balanceValue {
+    font-size: 32px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    letter-spacing: -1px;
+}
+
+.pnlRow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.pnlValue {
+    font-size: 16px;
+    font-weight: 600;
+    font-family: var(--font-mono);
+}
+
+.pnlPct {
+    font-size: 13px;
+    font-family: var(--font-mono);
+    opacity: 0.7;
+}
+
+.green {
+    color: var(--color-bull) !important;
+}
+
+.red {
+    color: var(--color-bear) !important;
+}
+
+/* ─── Stat Grid ────────────────────────────────── */
+.statGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.statCard {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.statLabel {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.statValue {
+    font-size: 18px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+}
+
+/* ─── Position Card ────────────────────────────── */
+.positionCard {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 16px;
+}
+
+.positionHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.positionTitle {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+}
+
+.positionBody {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.posSide {
+    font-weight: 700;
+    font-size: 14px;
+    padding: 4px 12px;
+    border-radius: 6px;
+}
+
+.posLong {
+    background: rgba(0, 210, 106, 0.1);
+    color: var(--color-bull);
+    border: 1px solid rgba(0, 210, 106, 0.2);
+}
+
+.posShort {
+    background: rgba(255, 71, 87, 0.1);
+    color: var(--color-bear);
+    border: 1px solid rgba(255, 71, 87, 0.2);
+}
+
+.posInfo {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+}
+
+.posQty {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.posEntry {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.emptyPosition {
+    text-align: center;
+    padding: 8px;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+/* ─── Recent Trades ────────────────────────────── */
+.tradesSection {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+.tradesHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.tradesTitle {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+}
+
+.tradesCount {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+
+.tradesList {
+    list-style: none;
+}
+
+.tradeItem {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+    transition: background 150ms ease;
+}
+
+.tradeItem:last-child {
+    border-bottom: none;
+}
+
+.tradeItem:active {
+    background: var(--bg-hover);
+}
+
+.tradeLeft {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.tradeSymbol {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.tradeMeta {
+    font-size: 11px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.tradeSide {
+    font-weight: 600;
+    font-size: 10px;
+}
+
+.tradeRight {
+    text-align: right;
+}
+
+.tradePnl {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 15px;
+}
+
+.tradeDate {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+
+.emptyTrades {
+    text-align: center;
+    padding: 24px 16px;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+/* ─── Loading ──────────────────────────────────── */
+.loadingScreen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    min-height: 100dvh;
+    gap: 16px;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+/* ─── Footer ───────────────────────────────────── */
+.footer {
+    text-align: center;
+    padding: 24px 20px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.footerLink {
+    color: var(--color-accent);
+}

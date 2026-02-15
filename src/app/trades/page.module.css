@@ -1,0 +1,327 @@
+.page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.title {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+}
+
+.subtitle {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+/* ─── Filters ──────────────────────────────────── */
+.filters {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    padding: var(--space-sm) 0;
+}
+
+.filterSelect {
+    min-width: 120px;
+}
+
+.filterLabel {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.filterGroup {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+}
+
+/* ─── Summary Cards ────────────────────────────── */
+.cardGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: var(--space-sm);
+}
+
+.card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.cardLabel {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.cardValue {
+    font-size: 20px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--text-primary);
+}
+
+.green {
+    color: var(--color-bull) !important;
+}
+
+.red {
+    color: var(--color-bear) !important;
+}
+
+/* ─── Charts ───────────────────────────────────── */
+.chartsRow {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-md);
+}
+
+.chartSection {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.sectionTitle {
+    font-size: 14px;
+    font-weight: 600;
+    padding: var(--space-md) var(--space-lg);
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.chartContainer {
+    width: 100%;
+}
+
+.chartContainer>div {
+    width: 100% !important;
+}
+
+.emptyChart {
+    padding: var(--space-xl) var(--space-lg);
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+/* ─── Trade Table ──────────────────────────────── */
+.tableSection {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.tableHeader {
+    padding: var(--space-md) var(--space-lg);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.tableTitle {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.tradeCount {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+
+.tableWrap {
+    overflow-x: auto;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.table th {
+    text-align: left;
+    padding: var(--space-sm) var(--space-md);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--text-muted);
+    font-weight: 600;
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    transition: color var(--transition-fast);
+}
+
+.table th:hover {
+    color: var(--text-primary);
+}
+
+.sortIcon {
+    margin-left: 4px;
+    opacity: 0.5;
+    font-size: 10px;
+}
+
+.sortActive {
+    color: var(--color-accent) !important;
+}
+
+.sortActive .sortIcon {
+    opacity: 1;
+}
+
+.table td {
+    padding: var(--space-sm) var(--space-md);
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-subtle);
+    white-space: nowrap;
+}
+
+.table tbody tr {
+    transition: background var(--transition-fast);
+    cursor: pointer;
+}
+
+.table tbody tr:hover {
+    background: var(--bg-hover);
+}
+
+.table tr:last-child td {
+    border-bottom: none;
+}
+
+.mono {
+    font-family: var(--font-mono);
+    font-weight: 500;
+}
+
+.long {
+    color: var(--color-bull);
+    font-weight: 600;
+}
+
+.short {
+    color: var(--color-bear);
+    font-weight: 600;
+}
+
+.pnlPositive {
+    color: var(--color-bull);
+    font-weight: 600;
+}
+
+.pnlNegative {
+    color: var(--color-bear);
+    font-weight: 600;
+}
+
+.expandedRow {
+    background: var(--bg-tertiary) !important;
+}
+
+.expandedRow:hover {
+    background: var(--bg-tertiary) !important;
+}
+
+/* ─── Expanded Detail ──────────────────────────── */
+.detailRow td {
+    padding: 0 !important;
+    border-bottom: 1px solid var(--border-color) !important;
+}
+
+.detailContent {
+    padding: var(--space-md) var(--space-lg);
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--space-md);
+    background: var(--bg-tertiary);
+    border-top: 1px solid var(--border-subtle);
+}
+
+.detailItem {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.detailLabel {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.detailValue {
+    font-size: 13px;
+    font-family: var(--font-mono);
+    color: var(--text-primary);
+}
+
+/* ─── Empty ────────────────────────────────────── */
+.emptyState {
+    text-align: center;
+    padding: var(--space-2xl);
+    color: var(--text-muted);
+}
+
+.emptyState p:first-child {
+    font-size: 24px;
+    margin-bottom: var(--space-sm);
+}
+
+.emptyHint {
+    font-size: 13px;
+}
+
+.emptyHint a {
+    color: var(--color-accent);
+    text-decoration: underline;
+}
+
+/* ─── Responsive ───────────────────────────────── */
+@media (max-width: 900px) {
+    .chartsRow {
+        grid-template-columns: 1fr;
+    }
+
+    .cardGrid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .cardGrid {
+        grid-template-columns: 1fr;
+    }
+
+    .detailContent {
+        grid-template-columns: 1fr 1fr;
+    }
+}
