@@ -342,6 +342,57 @@ export async function getShadowEquityCurve(startingBalance: number = 10000) {
     return points;
 }
 
+// ─── Shadow Decision Log ──────────────────────────────────────
+
+export interface ShadowDecisionLog {
+    id?: number;
+    timestamp: number;
+    symbol: string;
+    action: string;
+    score: number;
+    reason: string;
+    hadPosition: boolean;
+    positionSide?: string;
+    positionPnlPct?: number;
+    executed: boolean;
+    result?: string;
+}
+
+export async function saveShadowDecision(d: ShadowDecisionLog): Promise<void> {
+    const db = await qs();
+    await db.execute({
+        sql: `INSERT INTO shadow_decisions (timestamp, symbol, action, score, reason, had_position, position_side, position_pnl_pct, executed, result)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+            d.timestamp, d.symbol, d.action, d.score, d.reason,
+            d.hadPosition ? 1 : 0, d.positionSide || null, d.positionPnlPct ?? null,
+            d.executed ? 1 : 0, d.result || null,
+        ],
+    });
+}
+
+export async function getShadowDecisions(limit: number = 50): Promise<ShadowDecisionLog[]> {
+    const db = await qs();
+    const rs = await db.execute({
+        sql: `SELECT * FROM shadow_decisions ORDER BY timestamp DESC LIMIT ?`,
+        args: [limit],
+    });
+
+    return rs.rows.map(row => ({
+        id: Number(row.id),
+        timestamp: Number(row.timestamp),
+        symbol: row.symbol as string,
+        action: row.action as string,
+        score: Number(row.score),
+        reason: row.reason as string,
+        hadPosition: row.had_position === 1,
+        positionSide: row.position_side as string | undefined,
+        positionPnlPct: row.position_pnl_pct != null ? Number(row.position_pnl_pct) : undefined,
+        executed: row.executed === 1,
+        result: row.result as string | undefined,
+    }));
+}
+
 // ─── Helpers ───────────────────────────────────────────────────
 
 function rowToTrade(row: any): Trade {

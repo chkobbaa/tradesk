@@ -16,11 +16,36 @@ interface TradeStats {
     worstTrade: number;
 }
 
+interface Decision {
+    id: number;
+    timestamp: number;
+    symbol: string;
+    action: string;
+    score: number;
+    reason: string;
+    hadPosition: boolean;
+    positionSide?: string;
+    positionPnlPct?: number;
+    executed: boolean;
+    result?: string;
+}
+
 interface ShadowData {
     stats: TradeStats;
     equity: { time: number; balance: number }[];
     recentTrades: Trade[];
     portfolio: { balance: number; positions: Position[] };
+    decisions: Decision[];
+}
+
+function timeAgo(ts: number): string {
+    const diff = Date.now() - ts;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
 }
 
 function formatSmallDate(ts: number): string {
@@ -29,11 +54,36 @@ function formatSmallDate(ts: number): string {
         ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
+function actionIcon(action: string): string {
+    switch (action) {
+        case 'BUY': return '🟢';
+        case 'SELL': return '🔴';
+        case 'HOLD': return '⏸️';
+        case 'SL_TP_CLOSE': return '🎯';
+        case 'TIMEOUT_CLOSE': return '⏰';
+        default: return '•';
+    }
+}
+
+function actionColor(action: string): string {
+    switch (action) {
+        case 'BUY': return styles.green;
+        case 'SELL': return styles.red;
+        case 'HOLD': return styles.muted;
+        case 'SL_TP_CLOSE': return styles.yellow;
+        case 'TIMEOUT_CLOSE': return styles.yellow;
+        default: return '';
+    }
+}
+
+type Tab = 'overview' | 'thoughts' | 'trades';
+
 export default function MobilePage() {
     const [data, setData] = useState<ShadowData | null>(null);
     const [loading, setLoading] = useState(true);
     const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
     const [refreshing, setRefreshing] = useState(false);
+    const [tab, setTab] = useState<Tab>('overview');
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
     const fetchData = useCallback(async (isManual = false) => {
@@ -52,7 +102,6 @@ export default function MobilePage() {
         }
     }, []);
 
-    // Initial + auto-refresh
     useEffect(() => {
         fetchData();
         intervalRef.current = setInterval(() => fetchData(), 30_000);
@@ -75,6 +124,7 @@ export default function MobilePage() {
     const stats = data?.stats;
     const portfolio = data?.portfolio;
     const recentTrades = data?.recentTrades || [];
+    const decisions = data?.decisions || [];
     const position = portfolio?.positions?.[0] || null;
     const startBalance = 10000;
     const balance = portfolio?.balance ?? startBalance;
@@ -106,118 +156,248 @@ export default function MobilePage() {
                 </div>
             </header>
 
+            {/* Tab Bar */}
+            <div className={styles.tabBar}>
+                <button
+                    className={`${styles.tabBtn} ${tab === 'overview' ? styles.tabActive : ''}`}
+                    onClick={() => setTab('overview')}
+                >
+                    📊 Overview
+                </button>
+                <button
+                    className={`${styles.tabBtn} ${tab === 'thoughts' ? styles.tabActive : ''}`}
+                    onClick={() => setTab('thoughts')}
+                >
+                    🧠 Thoughts
+                    {decisions.filter(d => d.executed).length > 0 && (
+                        <span className={styles.tabBadge}>{decisions.filter(d => d.executed).length}</span>
+                    )}
+                </button>
+                <button
+                    className={`${styles.tabBtn} ${tab === 'trades' ? styles.tabActive : ''}`}
+                    onClick={() => setTab('trades')}
+                >
+                    📈 Trades
+                </button>
+            </div>
+
             <div className={styles.content}>
-                {/* Balance Card */}
-                <div className={styles.statusCard}>
-                    <div className={styles.statusHeader}>
-                        <span className={styles.botLabel}>Shadow Bot</span>
-                        <span className={`${styles.badge} ${position ? styles.badgeActive : styles.badgeIdle}`}>
-                            {position ? '● IN TRADE' : '○ IDLE'}
-                        </span>
-                    </div>
+                {/* ── Overview Tab ── */}
+                {tab === 'overview' && (
+                    <>
+                        {/* Balance Card */}
+                        <div className={styles.statusCard}>
+                            <div className={styles.statusHeader}>
+                                <span className={styles.botLabel}>Shadow Bot</span>
+                                <span className={`${styles.badge} ${position ? styles.badgeActive : styles.badgeIdle}`}>
+                                    {position ? '● IN TRADE' : '○ IDLE'}
+                                </span>
+                            </div>
 
-                    <div className={styles.balanceSection}>
-                        <div className={styles.balanceLabel}>Balance</div>
-                        <div className={styles.balanceValue}>
-                            ${balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            <div className={styles.balanceSection}>
+                                <div className={styles.balanceLabel}>Balance</div>
+                                <div className={styles.balanceValue}>
+                                    ${balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </div>
+                                <div className={styles.pnlRow}>
+                                    <span className={`${styles.pnlValue} ${totalPnL >= 0 ? styles.green : styles.red}`}>
+                                        {totalPnL >= 0 ? '+' : ''}{totalPnL.toFixed(2)}
+                                    </span>
+                                    <span className={`${styles.pnlPct} ${totalPnL >= 0 ? styles.green : styles.red}`}>
+                                        ({pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%)
+                                    </span>
+                                </div>
+                            </div>
                         </div>
-                        <div className={styles.pnlRow}>
-                            <span className={`${styles.pnlValue} ${totalPnL >= 0 ? styles.green : styles.red}`}>
-                                {totalPnL >= 0 ? '+' : ''}{totalPnL.toFixed(2)}
-                            </span>
-                            <span className={`${styles.pnlPct} ${totalPnL >= 0 ? styles.green : styles.red}`}>
-                                ({pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%)
-                            </span>
-                        </div>
-                    </div>
-                </div>
 
-                {/* Quick Stats */}
-                {stats && (
-                    <div className={styles.statGrid}>
-                        <div className={styles.statCard}>
-                            <span className={styles.statLabel}>Total Trades</span>
-                            <span className={styles.statValue}>{stats.total}</span>
+                        {/* Quick Stats */}
+                        {stats && (
+                            <div className={styles.statGrid}>
+                                <div className={styles.statCard}>
+                                    <span className={styles.statLabel}>Total Trades</span>
+                                    <span className={styles.statValue}>{stats.total}</span>
+                                </div>
+                                <div className={styles.statCard}>
+                                    <span className={styles.statLabel}>Win Rate</span>
+                                    <span className={`${styles.statValue} ${stats.winRate >= 50 ? styles.green : styles.red}`}>
+                                        {stats.winRate.toFixed(1)}%
+                                    </span>
+                                </div>
+                                <div className={styles.statCard}>
+                                    <span className={styles.statLabel}>Best Trade</span>
+                                    <span className={`${styles.statValue} ${styles.green}`}>
+                                        +{stats.bestTrade.toFixed(2)}
+                                    </span>
+                                </div>
+                                <div className={styles.statCard}>
+                                    <span className={styles.statLabel}>Worst Trade</span>
+                                    <span className={`${styles.statValue} ${styles.red}`}>
+                                        {stats.worstTrade.toFixed(2)}
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Current Position */}
+                        <div className={styles.positionCard}>
+                            <div className={styles.positionHeader}>
+                                <span className={styles.positionTitle}>Current Position</span>
+                            </div>
+                            {position ? (
+                                <div className={styles.positionBody}>
+                                    <div className={styles.posRow}>
+                                        <span className={`${styles.posSide} ${position.side === 'LONG' ? styles.posLong : styles.posShort}`}>
+                                            {position.side}
+                                        </span>
+                                        <span className={styles.posSymbol}>{position.symbol}</span>
+                                    </div>
+                                    <div className={styles.posDetails}>
+                                        <div className={styles.posDetail}>
+                                            <span className={styles.posDetailLabel}>Entry</span>
+                                            <span>${position.entryPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                                        </div>
+                                        <div className={styles.posDetail}>
+                                            <span className={styles.posDetailLabel}>Qty</span>
+                                            <span>{position.quantity.toFixed(6)}</span>
+                                        </div>
+                                        {position.stopLoss && (
+                                            <div className={styles.posDetail}>
+                                                <span className={styles.posDetailLabel}>SL</span>
+                                                <span className={styles.red}>${position.stopLoss.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                                            </div>
+                                        )}
+                                        {position.takeProfit && (
+                                            <div className={styles.posDetail}>
+                                                <span className={styles.posDetailLabel}>TP</span>
+                                                <span className={styles.green}>${position.takeProfit.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                                            </div>
+                                        )}
+                                        <div className={styles.posDetail}>
+                                            <span className={styles.posDetailLabel}>Held</span>
+                                            <span>{timeAgo(position.openTime)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className={styles.emptyPosition}>No active position</div>
+                            )}
                         </div>
-                        <div className={styles.statCard}>
-                            <span className={styles.statLabel}>Win Rate</span>
-                            <span className={`${styles.statValue} ${stats.winRate >= 50 ? styles.green : styles.red}`}>
-                                {stats.winRate.toFixed(1)}%
-                            </span>
+
+                        {/* Last Decision */}
+                        {decisions.length > 0 && (
+                            <div className={styles.lastDecisionCard}>
+                                <div className={styles.lastDecisionHeader}>
+                                    <span>Last Decision</span>
+                                    <span className={styles.lastDecisionTime}>{timeAgo(decisions[0].timestamp)}</span>
+                                </div>
+                                <div className={styles.lastDecisionBody}>
+                                    <span className={actionColor(decisions[0].action)}>
+                                        {actionIcon(decisions[0].action)} {decisions[0].action}
+                                    </span>
+                                    <span className={styles.lastDecisionScore}>
+                                        Score: {decisions[0].score.toFixed(3)}
+                                    </span>
+                                </div>
+                                <div className={styles.lastDecisionReason}>
+                                    {decisions[0].reason}
+                                </div>
+                            </div>
+                        )}
+                    </>
+                )}
+
+                {/* ── Thoughts Tab ── */}
+                {tab === 'thoughts' && (
+                    <div className={styles.thoughtsSection}>
+                        <div className={styles.thoughtsHeader}>
+                            <span className={styles.thoughtsTitle}>🧠 Bot Decision Log</span>
+                            <span className={styles.thoughtsCount}>{decisions.length} recent</span>
                         </div>
-                        <div className={styles.statCard}>
-                            <span className={styles.statLabel}>Best Trade</span>
-                            <span className={`${styles.statValue} ${styles.green}`}>
-                                +{stats.bestTrade.toFixed(2)}
-                            </span>
-                        </div>
-                        <div className={styles.statCard}>
-                            <span className={styles.statLabel}>Worst Trade</span>
-                            <span className={`${styles.statValue} ${styles.red}`}>
-                                {stats.worstTrade.toFixed(2)}
-                            </span>
-                        </div>
+                        {decisions.length === 0 ? (
+                            <div className={styles.emptyTrades}>No decisions logged yet. The bot needs candle data from the Charts page to make decisions.</div>
+                        ) : (
+                            <ul className={styles.thoughtsList}>
+                                {decisions.map((d, i) => (
+                                    <li key={d.id || i} className={`${styles.thoughtItem} ${d.executed ? styles.thoughtExecuted : ''}`}>
+                                        <div className={styles.thoughtTop}>
+                                            <span className={`${styles.thoughtAction} ${actionColor(d.action)}`}>
+                                                {actionIcon(d.action)} {d.action}
+                                            </span>
+                                            <span className={styles.thoughtTime}>{timeAgo(d.timestamp)}</span>
+                                        </div>
+                                        <div className={styles.thoughtScore}>
+                                            <div className={styles.scoreBar}>
+                                                <div
+                                                    className={`${styles.scoreFill} ${d.score > 0 ? styles.scorePositive : d.score < 0 ? styles.scoreNegative : ''}`}
+                                                    style={{
+                                                        width: `${Math.min(Math.abs(d.score) * 100, 100)}%`,
+                                                        marginLeft: d.score < 0 ? 'auto' : undefined,
+                                                    }}
+                                                />
+                                            </div>
+                                            <span className={styles.scoreLabel}>{d.score.toFixed(3)}</span>
+                                        </div>
+                                        <div className={styles.thoughtReason}>{d.reason}</div>
+                                        {d.result && (
+                                            <div className={`${styles.thoughtResult} ${d.executed ? styles.green : styles.muted}`}>
+                                                → {d.result}
+                                            </div>
+                                        )}
+                                        {d.hadPosition && d.positionPnlPct !== undefined && (
+                                            <div className={styles.thoughtPnl}>
+                                                Position P&L: <span className={d.positionPnlPct >= 0 ? styles.green : styles.red}>
+                                                    {d.positionPnlPct >= 0 ? '+' : ''}{d.positionPnlPct.toFixed(2)}%
+                                                </span>
+                                            </div>
+                                        )}
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
                     </div>
                 )}
 
-                {/* Current Position */}
-                <div className={styles.positionCard}>
-                    <div className={styles.positionHeader}>
-                        <span className={styles.positionTitle}>Current Position</span>
-                    </div>
-                    {position ? (
-                        <div className={styles.positionBody}>
-                            <span className={`${styles.posSide} ${position.side === 'LONG' ? styles.posLong : styles.posShort}`}>
-                                {position.side}
-                            </span>
-                            <div className={styles.posInfo}>
-                                <span className={styles.posQty}>
-                                    {position.quantity.toFixed(4)} {position.symbol.replace('USDT', '')}
-                                </span>
-                                <span className={styles.posEntry}>
-                                    Entry: ${position.entryPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                                </span>
-                            </div>
+                {/* ── Trades Tab ── */}
+                {tab === 'trades' && (
+                    <div className={styles.tradesSection}>
+                        <div className={styles.tradesHeader}>
+                            <span className={styles.tradesTitle}>Trade History</span>
+                            <span className={styles.tradesCount}>{recentTrades.length}</span>
                         </div>
-                    ) : (
-                        <div className={styles.emptyPosition}>No active position</div>
-                    )}
-                </div>
-
-                {/* Recent Trades */}
-                <div className={styles.tradesSection}>
-                    <div className={styles.tradesHeader}>
-                        <span className={styles.tradesTitle}>Recent Trades</span>
-                        <span className={styles.tradesCount}>{recentTrades.length}</span>
-                    </div>
-                    {recentTrades.length === 0 ? (
-                        <div className={styles.emptyTrades}>No trades yet</div>
-                    ) : (
-                        <ul className={styles.tradesList}>
-                            {recentTrades.slice(0, 10).map(trade => (
-                                <li key={trade.id} className={styles.tradeItem}>
-                                    <div className={styles.tradeLeft}>
-                                        <span className={styles.tradeSymbol}>{trade.symbol}</span>
-                                        <span className={styles.tradeMeta}>
-                                            <span className={`${styles.tradeSide} ${trade.side === 'LONG' ? styles.green : styles.red}`}>
-                                                {trade.side}
+                        {recentTrades.length === 0 ? (
+                            <div className={styles.emptyTrades}>No trades yet</div>
+                        ) : (
+                            <ul className={styles.tradesList}>
+                                {recentTrades.map(trade => (
+                                    <li key={trade.id} className={styles.tradeItem}>
+                                        <div className={styles.tradeLeft}>
+                                            <span className={styles.tradeSymbol}>{trade.symbol}</span>
+                                            <span className={styles.tradeMeta}>
+                                                <span className={`${styles.tradeSide} ${trade.side === 'LONG' ? styles.green : styles.red}`}>
+                                                    {trade.side}
+                                                </span>
+                                                <span>{trade.quantity.toFixed(4)}</span>
                                             </span>
-                                            <span>{trade.quantity.toFixed(4)}</span>
-                                        </span>
-                                    </div>
-                                    <div className={styles.tradeRight}>
-                                        <div className={`${styles.tradePnl} ${trade.pnl >= 0 ? styles.green : styles.red}`}>
-                                            {trade.pnl >= 0 ? '+' : ''}{trade.pnl.toFixed(2)}
+                                            <span className={styles.tradeEntryExit}>
+                                                ${trade.entryPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                                {' → '}
+                                                ${trade.exitPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                            </span>
                                         </div>
-                                        <div className={styles.tradeDate}>
-                                            {formatSmallDate(trade.closeTime)}
+                                        <div className={styles.tradeRight}>
+                                            <div className={`${styles.tradePnl} ${trade.pnl >= 0 ? styles.green : styles.red}`}>
+                                                {trade.pnl >= 0 ? '+' : ''}{trade.pnl.toFixed(2)}
+                                            </div>
+                                            <div className={styles.tradeDate}>
+                                                {formatSmallDate(trade.closeTime)}
+                                            </div>
                                         </div>
-                                    </div>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                )}
             </div>
 
             <div className={styles.footer}>

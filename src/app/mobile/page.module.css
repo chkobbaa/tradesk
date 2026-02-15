@@ -433,3 +433,278 @@
 .footerLink {
     color: var(--color-accent);
 }
+
+/* ─── Tab Bar ──────────────────────────────────── */
+.tabBar {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    position: sticky;
+    top: 53px;
+    z-index: 9;
+}
+
+.tabBtn {
+    flex: 1;
+    padding: 10px 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: all 150ms ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+
+.tabBtn:active {
+    background: var(--bg-hover);
+}
+
+.tabActive {
+    color: var(--color-accent);
+    border-bottom-color: var(--color-accent);
+}
+
+.tabBadge {
+    font-size: 10px;
+    font-weight: 700;
+    background: var(--color-accent);
+    color: white;
+    padding: 1px 5px;
+    border-radius: 999px;
+    min-width: 16px;
+    text-align: center;
+}
+
+/* ─── Enhanced Position ────────────────────────── */
+.posRow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.posSymbol {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.posDetails {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.posDetail {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 10px;
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+
+.posDetailLabel {
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+/* ─── Last Decision Card ──────────────────────── */
+.lastDecisionCard {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 14px 16px;
+}
+
+.lastDecisionHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+
+.lastDecisionTime {
+    font-family: var(--font-mono);
+    font-size: 11px;
+}
+
+.lastDecisionBody {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+.lastDecisionScore {
+    font-size: 12px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+}
+
+.lastDecisionReason {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+/* ─── Thoughts Section ─────────────────────────── */
+.thoughtsSection {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+.thoughtsHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.thoughtsTitle {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+}
+
+.thoughtsCount {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+
+.thoughtsList {
+    list-style: none;
+}
+
+.thoughtItem {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+    transition: background 150ms ease;
+}
+
+.thoughtItem:last-child {
+    border-bottom: none;
+}
+
+.thoughtExecuted {
+    border-left: 3px solid var(--color-accent);
+}
+
+.thoughtTop {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.thoughtAction {
+    font-weight: 700;
+    font-size: 13px;
+}
+
+.thoughtTime {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+
+.thoughtScore {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.scoreBar {
+    flex: 1;
+    height: 4px;
+    background: var(--bg-tertiary);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.scoreFill {
+    height: 100%;
+    border-radius: 999px;
+    transition: width 300ms ease;
+    background: var(--text-muted);
+}
+
+.scorePositive {
+    background: var(--color-bull);
+}
+
+.scoreNegative {
+    background: var(--color-bear);
+}
+
+.scoreLabel {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    min-width: 42px;
+    text-align: right;
+}
+
+.thoughtReason {
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+.thoughtResult {
+    margin-top: 4px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.thoughtPnl {
+    margin-top: 2px;
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+}
+
+/* ─── Trade Entry/Exit ─────────────────────────── */
+.tradeEntryExit {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+}
+
+/* ─── Utilities ────────────────────────────────── */
+.muted {
+    color: var(--text-muted) !important;
+}
+
+.yellow {
+    color: #f0b429 !important;
+}

@@ -103,6 +103,26 @@ export async function ensureSchema(): Promise<void> {
         await client.execute(`
             INSERT OR IGNORE INTO shadow_portfolio_state (id, balance) VALUES (1, 10000)
         `);
+
+        // Shadow Decision Log (bot thoughts)
+        await client.execute(`
+            CREATE TABLE IF NOT EXISTS shadow_decisions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp INTEGER NOT NULL,
+                symbol TEXT NOT NULL,
+                action TEXT NOT NULL,
+                score REAL NOT NULL,
+                reason TEXT NOT NULL,
+                had_position INTEGER NOT NULL DEFAULT 0,
+                position_side TEXT,
+                position_pnl_pct REAL,
+                executed INTEGER NOT NULL DEFAULT 0,
+                result TEXT,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        `);
+
+        await client.execute(`CREATE INDEX IF NOT EXISTS idx_shadow_decisions_ts ON shadow_decisions(timestamp)`);
     })();
 
     return _initPromise;
