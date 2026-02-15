@@ -106,48 +106,75 @@ function actionColor(action: string): string {
 
 type Tab = 'overview' | 'thoughts' | 'trades';
 
-export default function MobilePage() {
-    const [data, setData] = useState<ShadowData | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-    const [refreshing, setRefreshing] = useState(false);
-    const [tab, setTab] = useState<Tab>('overview');
-    const intervalRef = useRef<NodeJS.Timeout | null>(null);
+import useSWR from 'swr';
 
-    const fetchData = useCallback(async (isManual = false) => {
-        if (isManual) setRefreshing(true);
-        try {
-            const res = await fetch('/api/shadow/stats');
-            if (!res.ok) throw new Error('Failed');
-            const json = await res.json();
-            setData(json);
-            setLastUpdate(new Date());
-        } catch (err) {
-            console.error('Mobile fetch error:', err);
-        } finally {
-            setLoading(false);
-            setRefreshing(false);
+const fetcher = (url: string) => fetch(url).then(r => r.json());
+
+export default function MobilePage() {
+    const [tab, setTab] = useState<Tab>('overview');
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const [isSubscribed, setIsSubscribed] = useState(false);
+
+    useEffect(() => {
+        if ('serviceWorker' in navigator && 'PushManager' in window) {
+            navigator.serviceWorker.register('/sw.js').then(reg => {
+                reg.pushManager.getSubscription().then(sub => {
+                    setIsSubscribed(!!sub);
+                });
+            });
         }
     }, []);
 
-    useEffect(() => {
-        fetchData();
-        intervalRef.current = setInterval(() => fetchData(), 30_000);
-        return () => {
-            if (intervalRef.current) clearInterval(intervalRef.current);
-        };
-    }, [fetchData]);
+    async function togglePush() {
+        if (!('serviceWorker' in navigator)) return;
 
-    if (loading) {
-        return (
-            <div className={styles.mobileApp}>
-                <div className={styles.loadingScreen}>
-                    <div className="spinner" />
-                    Loading bot data...
-                </div>
-            </div>
-        );
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+
+        if (sub) {
+            // Unsubscribe
+            await sub.unsubscribe();
+            await fetch('/api/notifications/subscribe', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ endpoint: sub.endpoint }),
+            });
+            setIsSubscribed(false);
+        } else {
+            // Subscribe
+            const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+            if (!vapidKey) return alert('VAPID key missing');
+
+            const newSub = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: vapidKey,
+            });
+
+            await fetch('/api/notifications/subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ subscription: newSub }),
+            });
+            setIsSubscribed(true);
+        }
     }
+
+    const { data, isLoading, mutate } = useSWR<ShadowData>('/api/shadow/stats', fetcher, {
+        refreshInterval: 10000,
+    });
+
+    const refresh = async () => {
+        setIsRefreshing(true);
+        await mutate();
+        setTimeout(() => setIsRefreshing(false), 500);
+    };
+
+    if (isLoading && !data) return (
+        <div className={styles.loadingScreen}>
+            <div className={styles.logoDot} />
+            <span>Loading Shadow Bot...</span>
+        </div>
+    );
 
     const stats = data?.stats;
     const portfolio = data?.portfolio;
@@ -161,26 +188,27 @@ export default function MobilePage() {
     const pnlPct = (totalPnL / startBalance) * 100;
 
     return (
-        <div className={styles.mobileApp}>
-            {/* Header */}
+        <main className={styles.mobileApp}>
+            {/* ─── Header ─── */}
             <header className={styles.mobileHeader}>
                 <div className={styles.headerLeft}>
                     <div className={styles.logoDot} />
-                    <span className={styles.logoText}>TraDesk</span>
+                    <span className={styles.logoText}>Shadow Bot</span>
                 </div>
                 <div className={styles.headerRight}>
-                    <div className={styles.liveDot} />
-                    {lastUpdate && (
-                        <span className={styles.lastUpdate}>
-                            {lastUpdate.toLocaleTimeString('en-US', { hour12: false })}
-                        </span>
-                    )}
                     <button
-                        className={styles.refreshBtn}
-                        onClick={() => fetchData(true)}
-                        disabled={refreshing}
+                        className={`${styles.iconBtn} ${isSubscribed ? styles.iconActive : ''}`}
+                        onClick={togglePush}
+                        aria-label="Toggle notifications"
                     >
-                        <span className={refreshing ? styles.refreshSpin : ''}>↻</span>
+                        {isSubscribed ? '🔔' : '🔕'}
+                    </button>
+                    <div className={styles.liveDot} />
+                    <button
+                        className={`${styles.refreshBtn} ${isRefreshing ? styles.refreshSpin : ''}`}
+                        onClick={refresh}
+                    >
+                        ↻
                     </button>
                 </div>
             </header>
@@ -357,7 +385,7 @@ export default function MobilePage() {
                             <div className={styles.emptyTrades}>No decisions logged yet. The bot needs candle data from the Charts page to make decisions.</div>
                         ) : (
                             <ul className={styles.thoughtsList}>
-                                {decisions.map((d, i) => (
+                                {decisions.map((d: Decision, i: number) => (
                                     <li key={d.id || i} className={`${styles.thoughtItem} ${d.executed ? styles.thoughtExecuted : ''}`}>
                                         <div className={styles.thoughtTop}>
                                             <span className={`${styles.thoughtAction} ${actionColor(d.action)}`}>
@@ -408,7 +436,7 @@ export default function MobilePage() {
                             <div className={styles.emptyTrades}>No trades yet</div>
                         ) : (
                             <ul className={styles.tradesList}>
-                                {recentTrades.map(trade => (
+                                {recentTrades.map((trade: Trade) => (
                                     <li key={trade.id} className={styles.tradeItem}>
                                         <div className={styles.tradeLeft}>
                                             <span className={styles.tradeSymbol}>{trade.symbol}</span>
@@ -443,6 +471,6 @@ export default function MobilePage() {
             <div className={styles.footer}>
                 <a href="/" className={styles.footerLink}>Open full dashboard →</a>
             </div>
-        </div>
+        </main>
     );
 }

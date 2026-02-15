@@ -393,6 +393,38 @@ export async function getShadowDecisions(limit: number = 50): Promise<ShadowDeci
     }));
 }
 
+// ─── Push Subscriptions ───────────────────────────────────────
+
+export interface PushSubscriptionRecord {
+    endpoint: string;
+    subscription: any; // PushSubscription JSON
+}
+
+export async function savePushSubscription(subscription: any): Promise<void> {
+    const db = await qs();
+    await db.execute({
+        sql: `INSERT OR REPLACE INTO push_subscriptions (endpoint, subscription_json) VALUES (?, ?)`,
+        args: [subscription.endpoint, JSON.stringify(subscription)],
+    });
+}
+
+export async function getAllPushSubscriptions(): Promise<PushSubscriptionRecord[]> {
+    const db = await qs();
+    const rs = await db.execute('SELECT endpoint, subscription_json FROM push_subscriptions');
+    return rs.rows.map(row => ({
+        endpoint: row.endpoint as string,
+        subscription: JSON.parse(row.subscription_json as string),
+    }));
+}
+
+export async function deletePushSubscription(endpoint: string): Promise<void> {
+    const db = await qs();
+    await db.execute({
+        sql: 'DELETE FROM push_subscriptions WHERE endpoint = ?',
+        args: [endpoint],
+    });
+}
+
 // ─── Helpers ───────────────────────────────────────────────────
 
 function rowToTrade(row: any): Trade {

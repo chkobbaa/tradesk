@@ -123,6 +123,16 @@ export async function ensureSchema(): Promise<void> {
         `);
 
         await client.execute(`CREATE INDEX IF NOT EXISTS idx_shadow_decisions_ts ON shadow_decisions(timestamp)`);
+
+        // ─── Push Notifications ──────────────────────────────────────
+
+        await client.execute(`
+            CREATE TABLE IF NOT EXISTS push_subscriptions (
+                endpoint TEXT PRIMARY KEY,
+                subscription_json TEXT NOT NULL,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        `);
     })();
 
     return _initPromise;

@@ -99,6 +99,22 @@
     }
 }
 
+.iconBtn {
+    background: transparent;
+    border: none;
+    font-size: 18px;
+    padding: 6px;
+    border-radius: 8px;
+    cursor: pointer;
+    opacity: 0.5;
+    transition: all 0.2s;
+}
+
+.iconActive {
+    opacity: 1;
+    background: rgba(88, 166, 255, 0.1);
+}
+
 /* ─── Content ──────────────────────────────────── */
 .content {
     padding: 16px 20px;

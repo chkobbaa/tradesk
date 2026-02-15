@@ -5,6 +5,7 @@ import { TradingEngine } from '@/core/engine';
 import { loadShadowPortfolioState, saveShadowPortfolioState, saveShadowTrade, saveShadowDecision } from '@/db';
 import { openPosition, closePosition } from '@/core/trading';
 import { Trade } from '@/core/trading/types';
+import { sendPushNotification } from '@/lib/notify';
 
 const MAX_HOLD_MS = 4 * 60 * 60 * 1000; // 4 hours max hold
 const SL_PCT = 0.015; // 1.5% stop loss
@@ -61,6 +62,14 @@ export async function GET(req: NextRequest) {
                     regime: decision.regime,
                     timestamp: Date.now()
                 }));
+
+                // Notify: Timeout Close
+                const pnl = executedTrade.pnl;
+                const emoji = pnl >= 0 ? '💰' : '💸';
+                await sendPushNotification(
+                    `⏰ Timeout Close: ${existingPosition.side}`,
+                    `Force closed after 4h. PnL: ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)} ${emoji}\nRegime: ${decision.regime}`
+                );
             }
 
             await saveShadowDecision({
@@ -95,24 +104,29 @@ export async function GET(req: NextRequest) {
         if (existingPosition) {
             let shouldClose = false;
             let closeReason = '';
+            let isWin = false;
 
             if (existingPosition.side === 'LONG') {
                 if (existingPosition.stopLoss !== null && currentPrice <= existingPosition.stopLoss) {
                     shouldClose = true;
                     closeReason = `SL hit at $${existingPosition.stopLoss.toFixed(2)}`;
+                    isWin = false;
                 }
                 if (existingPosition.takeProfit !== null && currentPrice >= existingPosition.takeProfit) {
                     shouldClose = true;
                     closeReason = `TP hit at $${existingPosition.takeProfit.toFixed(2)}`;
+                    isWin = true;
                 }
             } else {
                 if (existingPosition.stopLoss !== null && currentPrice >= existingPosition.stopLoss) {
                     shouldClose = true;
                     closeReason = `SL hit at $${existingPosition.stopLoss.toFixed(2)}`;
+                    isWin = false;
                 }
                 if (existingPosition.takeProfit !== null && currentPrice <= existingPosition.takeProfit) {
                     shouldClose = true;
                     closeReason = `TP hit at $${existingPosition.takeProfit.toFixed(2)}`;
+                    isWin = true;
                 }
             }
 
@@ -128,6 +142,14 @@ export async function GET(req: NextRequest) {
                         regime: decision.regime,
                         timestamp: Date.now()
                     }));
+
+                    // Notify: SL/TP Hit
+                    const pnl = executedTrade.pnl;
+                    const emoji = isWin ? '🎯' : '🛑';
+                    await sendPushNotification(
+                        `${emoji} ${isWin ? 'Take Profit' : 'Stop Loss'} Hit`,
+                        `${existingPosition.side} closed. PnL: ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}\nRegime: ${decision.regime}`
+                    );
                 }
 
                 await saveShadowDecision({
@@ -176,6 +198,13 @@ export async function GET(req: NextRequest) {
                         regime: decision.regime,
                         timestamp: decision.timestamp
                     }));
+
+                    // Notify: Close Short
+                    const pnl = executedTrade.pnl;
+                    await sendPushNotification(
+                        `🔄 Reversal: Closed SHORT`,
+                        `PnL: ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}. Flipping to LONG.`
+                    );
                 }
             }
 
@@ -194,6 +223,12 @@ export async function GET(req: NextRequest) {
                         takeProfit: tp,
                     });
                     actionTaken = actionTaken === 'NONE' ? 'OPEN_LONG' : 'REVERSE_LONG';
+
+                    // Notify: Open LONG
+                    await sendPushNotification(
+                        `🚀 Opened LONG @ $${currentPrice.toFixed(0)}`,
+                        `Regime: ${decision.regime}\nReason: ${decision.reason}`
+                    );
                 }
             }
         }
@@ -211,6 +246,13 @@ export async function GET(req: NextRequest) {
                         regime: decision.regime,
                         timestamp: decision.timestamp
                     }));
+
+                    // Notify: Close Long
+                    const pnl = executedTrade.pnl;
+                    await sendPushNotification(
+                        `🔄 Reversal: Closed LONG`,
+                        `PnL: ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}. Flipping to SHORT.`
+                    );
                 }
             }
 
@@ -229,6 +271,12 @@ export async function GET(req: NextRequest) {
                         takeProfit: tp,
                     });
                     actionTaken = actionTaken === 'NONE' ? 'OPEN_SHORT' : 'REVERSE_SHORT';
+
+                    // Notify: Open SHORT
+                    await sendPushNotification(
+                        `📉 Opened SHORT @ $${currentPrice.toFixed(0)}`,
+                        `Regime: ${decision.regime}\nReason: ${decision.reason}`
+                    );
                 }
             }
         }
