@@ -114,6 +114,9 @@ export default function MobilePage() {
     const [tab, setTab] = useState<Tab>('overview');
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isSubscribed, setIsSubscribed] = useState(false);
+    // Selection Mode State
+    const [isSelectionMode, setIsSelectionMode] = useState(false);
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         if ('serviceWorker' in navigator && 'PushManager' in window) {
@@ -159,6 +162,40 @@ export default function MobilePage() {
         }
     }
 
+    // Selection Handlers
+    const toggleSelection = (id: string) => {
+        const newSet = new Set(selectedIds);
+        if (newSet.has(id)) {
+            newSet.delete(id);
+        } else {
+            newSet.add(id);
+        }
+        setSelectedIds(newSet);
+    };
+
+    const handleCloseSelected = async () => {
+        if (selectedIds.size === 0) return;
+        if (!confirm(`Close ${selectedIds.size} position(s) at current market price?`)) return;
+
+        try {
+            const res = await fetch('/api/shadow/trade/close', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ positionIds: Array.from(selectedIds) }),
+            });
+            const json = await res.json();
+            if (json.success) {
+                setIsSelectionMode(false);
+                setSelectedIds(new Set());
+                mutate(); // Refresh data
+            } else {
+                alert('Error closing positions: ' + json.error);
+            }
+        } catch (err) {
+            alert('Failed to close positions');
+        }
+    };
+
     const { data, isLoading, mutate } = useSWR<ShadowData>('/api/shadow/stats', fetcher, {
         refreshInterval: 10000,
     });
@@ -181,7 +218,8 @@ export default function MobilePage() {
     const recentTrades = data?.recentTrades || [];
     const decisions = data?.decisions || [];
     const regime = data?.regime;
-    const position = portfolio?.positions?.[0] || null;
+    const positions = portfolio?.positions || [];
+    // If we have positions, we might want to default to showing them, but let's stick to list view
     const startBalance = 10000;
     const balance = portfolio?.balance ?? startBalance;
     const totalPnL = balance - startBalance;
@@ -257,8 +295,8 @@ export default function MobilePage() {
                         <div className={styles.statusCard}>
                             <div className={styles.statusHeader}>
                                 <span className={styles.botLabel}>Shadow Bot</span>
-                                <span className={`${styles.badge} ${position ? styles.badgeActive : styles.badgeIdle}`}>
-                                    {position ? '● IN TRADE' : '○ IDLE'}
+                                <span className={`${styles.badge} ${positions.length > 0 ? styles.badgeActive : styles.badgeIdle}`}>
+                                    {positions.length > 0 ? `● ${positions.length} ACTIVE` : '○ IDLE'}
                                 </span>
                             </div>
 
@@ -306,50 +344,90 @@ export default function MobilePage() {
                             </div>
                         )}
 
-                        {/* Current Position */}
-                        <div className={styles.positionCard}>
+                        {/* Active Positions List */}
+                        <div className={styles.positionSection}>
                             <div className={styles.positionHeader}>
-                                <span className={styles.positionTitle}>Current Position</span>
+                                <span className={styles.positionTitle}>Active Positions ({positions.length})</span>
+                                {positions.length > 0 && (
+                                    <button
+                                        className={styles.selectBtn}
+                                        onClick={() => {
+                                            if (isSelectionMode) {
+                                                setIsSelectionMode(false);
+                                                setSelectedIds(new Set());
+                                            } else {
+                                                setIsSelectionMode(true);
+                                            }
+                                        }}
+                                    >
+                                        {isSelectionMode ? 'Cancel' : 'Select'}
+                                    </button>
+                                )}
                             </div>
-                            {position ? (
-                                <div className={styles.positionBody}>
-                                    <div className={styles.posRow}>
-                                        <span className={`${styles.posSide} ${position.side === 'LONG' ? styles.posLong : styles.posShort}`}>
-                                            {position.side}
-                                        </span>
-                                        <span className={styles.posSymbol}>{position.symbol}</span>
-                                    </div>
-                                    <div className={styles.posDetails}>
-                                        <div className={styles.posDetail}>
-                                            <span className={styles.posDetailLabel}>Entry</span>
-                                            <span>${position.entryPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-                                        </div>
-                                        <div className={styles.posDetail}>
-                                            <span className={styles.posDetailLabel}>Qty</span>
-                                            <span>{position.quantity.toFixed(6)}</span>
-                                        </div>
-                                        {position.stopLoss && (
-                                            <div className={styles.posDetail}>
-                                                <span className={styles.posDetailLabel}>SL</span>
-                                                <span className={styles.red}>${position.stopLoss.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-                                            </div>
-                                        )}
-                                        {position.takeProfit && (
-                                            <div className={styles.posDetail}>
-                                                <span className={styles.posDetailLabel}>TP</span>
-                                                <span className={styles.green}>${position.takeProfit.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-                                            </div>
-                                        )}
-                                        <div className={styles.posDetail}>
-                                            <span className={styles.posDetailLabel}>Held</span>
-                                            <span>{timeAgo(position.openTime)}</span>
-                                        </div>
-                                    </div>
-                                </div>
+
+                            {positions.length === 0 ? (
+                                <div className={styles.emptyPosition}>No active positions</div>
                             ) : (
-                                <div className={styles.emptyPosition}>No active position</div>
+                                <ul className={styles.positionList}>
+                                    {positions.map(pos => (
+                                        <li
+                                            key={pos.id}
+                                            className={`${styles.positionCard} ${isSelectionMode ? styles.selectionMode : ''} ${selectedIds.has(pos.id) ? styles.selected : ''}`}
+                                            onClick={() => isSelectionMode && toggleSelection(pos.id)}
+                                        >
+                                            {isSelectionMode && (
+                                                <div className={`${styles.paramCheckbox} ${selectedIds.has(pos.id) ? styles.checked : ''}`}>
+                                                    {selectedIds.has(pos.id) && '✓'}
+                                                </div>
+                                            )}
+                                            <div className={styles.positionBody}>
+                                                <div className={styles.posRow}>
+                                                    <span className={`${styles.posSide} ${pos.side === 'LONG' ? styles.posLong : styles.posShort}`}>
+                                                        {pos.side}
+                                                    </span>
+                                                    <span className={styles.posSymbol}>{pos.symbol}</span>
+                                                </div>
+                                                <div className={styles.posDetails}>
+                                                    <div className={styles.posDetail}>
+                                                        <span className={styles.posDetailLabel}>Entry</span>
+                                                        <span>${pos.entryPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                                                    </div>
+                                                    <div className={styles.posDetail}>
+                                                        <span className={styles.posDetailLabel}>Qty</span>
+                                                        <span>{pos.quantity.toFixed(6)}</span>
+                                                    </div>
+                                                    {pos.stopLoss && (
+                                                        <div className={styles.posDetail}>
+                                                            <span className={styles.posDetailLabel}>SL</span>
+                                                            <span className={styles.red}>${pos.stopLoss.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                                                        </div>
+                                                    )}
+                                                    {pos.takeProfit && (
+                                                        <div className={styles.posDetail}>
+                                                            <span className={styles.posDetailLabel}>TP</span>
+                                                            <span className={styles.green}>${pos.takeProfit.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                                                        </div>
+                                                    )}
+                                                    <div className={styles.posDetail}>
+                                                        <span className={styles.posDetailLabel}>Held</span>
+                                                        <span>{timeAgo(pos.openTime)}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
                             )}
                         </div>
+
+                        {/* Floating Action Button for Closing */}
+                        {isSelectionMode && selectedIds.size > 0 && (
+                            <div className={styles.floatingAction}>
+                                <button className={styles.floatingCloseBtn} onClick={handleCloseSelected}>
+                                    Close {selectedIds.size} Position{selectedIds.size > 1 ? 's' : ''} 🗑️
+                                </button>
+                            </div>
+                        )}
 
                         {/* Last Decision */}
                         {decisions.length > 0 && (

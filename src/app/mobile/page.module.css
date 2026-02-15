@@ -801,6 +801,270 @@
 }
 
 .regimeHighVol {
+    border-color: rgba(255, 71, 87, 0.3);
+    background: rgba(255, 71, 87, 0.06);
+}
+
+.regimeHighVol .regimeLabel {
+    color: var(--color-bear);
+}
+
+.regimeEvent {
+    border-color: rgba(240, 180, 41, 0.3);
+    background: rgba(240, 180, 41, 0.06);
+}
+
+.regimeEvent .regimeLabel {
+    color: #f0b429;
+}
+
+.regimeUnclear {
+    border-color: var(--border-color);
+    background: var(--bg-tertiary);
+}
+
+.regimeUnclear .regimeLabel {
+    color: var(--text-muted);
+}
+
+/* ─── Selection UI ─────────────────────────────── */
+
+.selectBtn {
+    background: transparent;
+    border: none;
+    color: var(--color-accent);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 4px 8px;
+}
+
+.positionSection {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.positionList {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.selectionMode {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding-left: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.positionCard.selected {
+    border-color: var(--color-accent);
+    background: rgba(88, 166, 255, 0.05);
+}
+
+.paramCheckbox {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid var(--border-color);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+    transition: all 0.2s;
+}
+
+.paramCheckbox.checked {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+}
+
+/* ─── Floating Action ──────────────────────────── */
+
+.floatingAction {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    width: 90%;
+    max-width: 400px;
+    display: flex;
+    justify-content: center;
+    animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUp {
+    from {
+        transform: translate(-50%, 100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translate(-50%, 0);
+        opacity: 1;
+    }
+}
+
+.floatingCloseBtn {
+    background: var(--color-bear);
+    color: white;
+    border: none;
+    padding: 14px 24px;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 15px;
+    box-shadow: 0 4px 20px rgba(255, 71, 87, 0.4);
+    width: 100%;
+    text-align: center;
+    cursor: pointer;
+    transition: transform 0.1s;
+}
+
+.floatingCloseBtn:active {
+    transform: scale(0.98);
+}
+
+.regimeHighVol {
+    border-color: rgba(255, 71, 87, 0.3);
+    background: rgba(255, 71, 87, 0.06);
+}
+
+.regimeHighVol .regimeLabel {
+    color: var(--color-bear);
+}
+
+.regimeEvent {
+    border-color: rgba(240, 180, 41, 0.3);
+    background: rgba(240, 180, 41, 0.06);
+}
+
+.regimeEvent .regimeLabel {
+    color: #f0b429;
+}
+
+.regimeUnclear {
+    border-color: var(--border-color);
+    background: var(--bg-tertiary);
+}
+
+.regimeUnclear .regimeLabel {
+    color: var(--text-muted);
+}
+
+/* ─── Selection UI ─────────────────────────────── */
+
+.selectBtn {
+    background: transparent;
+    border: none;
+    color: var(--color-accent);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 4px 8px;
+}
+
+.positionSection {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.positionList {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.selectionMode {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding-left: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.positionCard.selected {
+    border-color: var(--color-accent);
+    background: rgba(88, 166, 255, 0.05);
+}
+
+.paramCheckbox {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid var(--border-color);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+    transition: all 0.2s;
+}
+
+.paramCheckbox.checked {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+}
+
+/* ─── Floating Action ──────────────────────────── */
+
+.floatingAction {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    width: 90%;
+    max-width: 400px;
+    display: flex;
+    justify-content: center;
+    animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUp {
+    from {
+        transform: translate(-50%, 100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translate(-50%, 0);
+        opacity: 1;
+    }
+}
+
+.floatingCloseBtn {
+    background: var(--color-bear);
+    color: white;
+    border: none;
+    padding: 14px 24px;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 15px;
+    box-shadow: 0 4px 20px rgba(255, 71, 87, 0.4);
+    width: 100%;
+    text-align: center;
+    cursor: pointer;
+    transition: transform 0.1s;
+}
+
+.floatingCloseBtn:active {
+    transform: scale(0.98);
+}
+
+.regimeHighVol {
     border-color: rgba(240, 180, 41, 0.3);
     background: rgba(240, 180, 41, 0.06);
 }
