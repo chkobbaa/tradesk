@@ -193,6 +193,15 @@ export default function CandleChart({
         };
     }, [initChart]);
 
+    useEffect(() => {
+        return () => {
+            // Cleanup refs to prevent access to destroyed series
+            chartRef.current = null;
+            candleSeriesRef.current = null;
+            volumeSeriesRef.current = null;
+        };
+    }, []);
+
     // Main candle data — ONLY fitContent on true dataset changes, NOT on incremental updates
     useEffect(() => {
         if (!candleSeriesRef.current || !volumeSeriesRef.current) return;
@@ -289,8 +298,12 @@ export default function CandleChart({
     // ─── Decision Markers ─────────────────────────────────────────
     useEffect(() => {
         if (!candleSeriesRef.current) return;
+        const series = candleSeriesRef.current as any;
+
         if (!decisions || decisions.length === 0) {
-            (candleSeriesRef.current as any).setMarkers([]);
+            if (typeof series.setMarkers === 'function') {
+                series.setMarkers([]);
+            }
             return;
         }
 
@@ -330,7 +343,9 @@ export default function CandleChart({
             // Sort by time is required by lightweight-charts
             .sort((a, b) => (a.time as number) - (b.time as number));
 
-        (candleSeriesRef.current as any).setMarkers(markers);
+        if (candleSeriesRef.current && typeof (candleSeriesRef.current as any).setMarkers === 'function') {
+            (candleSeriesRef.current as any).setMarkers(markers);
+        }
     }, [decisions]);
 
     // Indicator series rendering
