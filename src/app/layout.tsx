@@ -6,6 +6,7 @@ export const metadata: Metadata = {
   title: 'TraDesk — Trading Terminal',
   description: 'A professional trading terminal for market data, charts, indicators, and trade simulation.',
   keywords: ['trading', 'terminal', 'crypto', 'OHLCV', 'candles', 'indicators'],
+  manifest: '/manifest.json',
 };
 
 export default function RootLayout({
