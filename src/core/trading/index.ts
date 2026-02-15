@@ -93,7 +93,9 @@ export function closePosition(
     const netPnL = rawPnL - pos.entryFee - exitFee;
 
     // Return value = exit proceeds + net PnL effect
-    const exitProceeds = pos.quantity * exitPrice - exitFee;
+    const exitProceeds = pos.side === 'LONG'
+        ? pos.quantity * exitPrice - exitFee
+        : pos.quantity * (2 * pos.entryPrice - exitPrice) - exitFee;
 
     const trade: Trade = {
         id: pos.id,
@@ -161,7 +163,14 @@ export function calculateEquity(
     currentPrice: number,
 ): number {
     const positionValues = portfolio.positions.reduce(
-        (sum, pos) => sum + pos.quantity * currentPrice,
+        (sum, pos) => {
+            if (pos.side === 'LONG') {
+                return sum + pos.quantity * currentPrice;
+            } else {
+                // For SHORT: Value = Cost + PnL = Q*Entry + Q*(Entry-Current) = Q*(2*Entry-Current)
+                return sum + pos.quantity * (2 * pos.entryPrice - currentPrice);
+            }
+        },
         0,
     );
     return portfolio.balance + positionValues;
