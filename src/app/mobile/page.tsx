@@ -30,12 +30,19 @@ interface Decision {
     result?: string;
 }
 
+interface RegimeData {
+    label: string;
+    reason: string;
+    confidence: number;
+}
+
 interface ShadowData {
     stats: TradeStats;
     equity: { time: number; balance: number }[];
     recentTrades: Trade[];
     portfolio: { balance: number; positions: Position[] };
     decisions: Decision[];
+    regime?: RegimeData;
 }
 
 function timeAgo(ts: number): string {
@@ -52,6 +59,27 @@ function formatSmallDate(ts: number): string {
     const d = new Date(ts);
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
         ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function regimeEmoji(label: string): string {
+    switch (label) {
+        case 'TRENDING': return '📈';
+        case 'RANGING': return '↔️';
+        case 'HIGH_VOLATILITY': return '⚡';
+        case 'EVENT_DRIVEN': return '🚨';
+        case 'UNCLEAR': return '🌫️';
+        default: return '❓';
+    }
+}
+
+function regimeStyle(label: string): string {
+    switch (label) {
+        case 'TRENDING': return styles.regimeTrending;
+        case 'RANGING': return styles.regimeRanging;
+        case 'HIGH_VOLATILITY': return styles.regimeHighVol;
+        case 'EVENT_DRIVEN': return styles.regimeEvent;
+        default: return styles.regimeUnclear;
+    }
 }
 
 function actionIcon(action: string): string {
@@ -125,6 +153,7 @@ export default function MobilePage() {
     const portfolio = data?.portfolio;
     const recentTrades = data?.recentTrades || [];
     const decisions = data?.decisions || [];
+    const regime = data?.regime;
     const position = portfolio?.positions?.[0] || null;
     const startBalance = 10000;
     const balance = portfolio?.balance ?? startBalance;
@@ -185,6 +214,17 @@ export default function MobilePage() {
                 {/* ── Overview Tab ── */}
                 {tab === 'overview' && (
                     <>
+                        {/* Regime Label */}
+                        {regime && (
+                            <div className={`${styles.regimeBadge} ${regimeStyle(regime.label)}`}>
+                                <span className={styles.regimeIcon}>{regimeEmoji(regime.label)}</span>
+                                <div className={styles.regimeInfo}>
+                                    <span className={styles.regimeLabel}>{regime.label.replace('_', ' ')}</span>
+                                    <span className={styles.regimeReason}>{regime.reason}</span>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Balance Card */}
                         <div className={styles.statusCard}>
                             <div className={styles.statusHeader}>

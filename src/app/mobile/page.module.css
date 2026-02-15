@@ -708,3 +708,92 @@
 .yellow {
     color: #f0b429 !important;
 }
+
+/* ─── Regime Badge ─────────────────────────────── */
+.regimeBadge {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+}
+
+.regimeIcon {
+    font-size: 22px;
+    flex-shrink: 0;
+}
+
+.regimeInfo {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.regimeLabel {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.regimeReason {
+    font-size: 10px;
+    color: var(--text-muted);
+    line-height: 1.3;
+    word-break: break-word;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+/* Regime variant colors */
+.regimeTrending {
+    border-color: rgba(0, 210, 106, 0.3);
+    background: rgba(0, 210, 106, 0.06);
+}
+
+.regimeTrending .regimeLabel {
+    color: var(--color-bull);
+}
+
+.regimeRanging {
+    border-color: rgba(88, 166, 255, 0.3);
+    background: rgba(88, 166, 255, 0.06);
+}
+
+.regimeRanging .regimeLabel {
+    color: var(--color-accent);
+}
+
+.regimeHighVol {
+    border-color: rgba(240, 180, 41, 0.3);
+    background: rgba(240, 180, 41, 0.06);
+}
+
+.regimeHighVol .regimeLabel {
+    color: #f0b429;
+}
+
+.regimeEvent {
+    border-color: rgba(255, 71, 87, 0.3);
+    background: rgba(255, 71, 87, 0.06);
+}
+
+.regimeEvent .regimeLabel {
+    color: var(--color-bear);
+}
+
+.regimeUnclear {
+    border-color: var(--border-color);
+    background: var(--bg-tertiary);
+}
+
+.regimeUnclear .regimeLabel {
+    color: var(--text-muted);
+}

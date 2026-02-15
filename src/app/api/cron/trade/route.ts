@@ -2,16 +2,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchBinanceCandles } from '@/lib/binance';
 import { TradingEngine } from '@/core/engine';
-import { loadShadowPortfolioState, saveShadowPortfolioState, saveShadowTrade } from '@/db';
+import { loadShadowPortfolioState, saveShadowPortfolioState, saveShadowTrade, saveShadowDecision } from '@/db';
 import { openPosition, closePosition } from '@/core/trading';
 import { Trade } from '@/core/trading/types';
 
+const MAX_HOLD_MS = 4 * 60 * 60 * 1000; // 4 hours max hold
+const SL_PCT = 0.015; // 1.5% stop loss
+const TP_PCT = 0.030; // 3.0% take profit (2:1 R:R)
+
 export async function GET(req: NextRequest) {
-    // 1. Security Check (Basic Secret Key)
+    // 1. Security Check
     const { searchParams } = new URL(req.url);
     const secret = searchParams.get('key');
     const CRON_SECRET = process.env.CRON_SECRET || '1234';
-    // In production, user must set CRON_SECRET in env vars.
 
     if (secret !== CRON_SECRET) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -21,98 +24,249 @@ export async function GET(req: NextRequest) {
     const timeframe = '1h';
 
     try {
-        // 2. Fetch Data
-        const candles = await fetchBinanceCandles(symbol, timeframe, 100);
+        // 2. Fetch Data — 250 candles so TrendSignal has enough for EMA200
+        const candles = await fetchBinanceCandles(symbol, timeframe, 250);
         if (candles.length < 50) return NextResponse.json({ error: 'Not enough data' });
 
         const currentPrice = candles[candles.length - 1].close;
 
-        // 3. Run Engine
+        // 3. Run Engine (now includes regime label)
         const engine = new TradingEngine();
-        const decision = engine.evaluate(candles, symbol, 'NEUTRAL'); // TODO: Fetch Macro from DB?
+        const decision = engine.evaluate(candles, symbol, 'NEUTRAL');
 
         // 4. Load Portfolio (Shadow)
         const portfolioState = await loadShadowPortfolioState();
         let portfolio = {
             balance: portfolioState.balance,
             positions: portfolioState.positions,
-            trades: [] as Trade[] // We don't need history to execute, just positions
+            trades: [] as Trade[]
         };
 
         let executedTrade: Trade | null = null;
         let actionTaken = 'NONE';
 
-        // 5. Execute Logic (Similar to useShadowTrader)
         const existingPosition = portfolio.positions.find(p => p.symbol === symbol);
 
-        // Buying
-        if (decision.action === 'BUY') {
-            if (existingPosition && existingPosition.side === 'SHORT') {
+        // ─── 5a. Max-hold timeout: force-close stale positions ───
+        if (existingPosition && (Date.now() - existingPosition.openTime) > MAX_HOLD_MS) {
+            const duration = Date.now() - existingPosition.openTime;
+            portfolio = closePosition(portfolio, existingPosition.id, currentPrice);
+            executedTrade = portfolio.trades[portfolio.trades.length - 1];
+            actionTaken = 'TIMEOUT_CLOSE';
+
+            if (executedTrade) {
+                await saveShadowTrade(executedTrade, JSON.stringify({
+                    score: 0,
+                    reason: `Timeout: held for ${Math.round(duration / 60000)}m`,
+                    regime: decision.regime,
+                    timestamp: Date.now()
+                }));
+            }
+
+            await saveShadowDecision({
+                timestamp: Date.now(),
+                symbol,
+                action: 'TIMEOUT_CLOSE',
+                score: 0,
+                reason: `Max hold exceeded (${Math.round(duration / 60000)}m). Force closed at $${currentPrice.toFixed(2)}. Regime: ${decision.regime}`,
+                hadPosition: true,
+                positionSide: existingPosition.side,
+                positionPnlPct: ((currentPrice - existingPosition.entryPrice) / existingPosition.entryPrice * 100 * (existingPosition.side === 'LONG' ? 1 : -1)),
+                executed: true,
+                result: `Closed ${existingPosition.side} for PnL: ${executedTrade?.pnl?.toFixed(2) || '?'}`,
+            });
+
+            await saveShadowPortfolioState(portfolio);
+
+            return NextResponse.json({
+                success: true,
+                symbol,
+                price: currentPrice,
+                decision: 'TIMEOUT_CLOSE',
+                reason: `Max hold exceeded, force closed`,
+                actionTaken,
+                regime: decision.regime,
+                regimeReason: decision.regimeReason,
+                balance: portfolio.balance
+            });
+        }
+
+        // ─── 5b. SL/TP check for existing positions ─────────────
+        if (existingPosition) {
+            let shouldClose = false;
+            let closeReason = '';
+
+            if (existingPosition.side === 'LONG') {
+                if (existingPosition.stopLoss !== null && currentPrice <= existingPosition.stopLoss) {
+                    shouldClose = true;
+                    closeReason = `SL hit at $${existingPosition.stopLoss.toFixed(2)}`;
+                }
+                if (existingPosition.takeProfit !== null && currentPrice >= existingPosition.takeProfit) {
+                    shouldClose = true;
+                    closeReason = `TP hit at $${existingPosition.takeProfit.toFixed(2)}`;
+                }
+            } else {
+                if (existingPosition.stopLoss !== null && currentPrice >= existingPosition.stopLoss) {
+                    shouldClose = true;
+                    closeReason = `SL hit at $${existingPosition.stopLoss.toFixed(2)}`;
+                }
+                if (existingPosition.takeProfit !== null && currentPrice <= existingPosition.takeProfit) {
+                    shouldClose = true;
+                    closeReason = `TP hit at $${existingPosition.takeProfit.toFixed(2)}`;
+                }
+            }
+
+            if (shouldClose) {
                 portfolio = closePosition(portfolio, existingPosition.id, currentPrice);
-                executedTrade = portfolio.trades[portfolio.trades.length - 1]; // This needs verification if closePosition adds to trade array
+                executedTrade = portfolio.trades[portfolio.trades.length - 1];
+                actionTaken = 'SL_TP_CLOSE';
+
+                if (executedTrade) {
+                    await saveShadowTrade(executedTrade, JSON.stringify({
+                        score: 0,
+                        reason: closeReason,
+                        regime: decision.regime,
+                        timestamp: Date.now()
+                    }));
+                }
+
+                await saveShadowDecision({
+                    timestamp: Date.now(),
+                    symbol,
+                    action: 'SL_TP_CLOSE',
+                    score: 0,
+                    reason: `${closeReason} (price: $${currentPrice.toFixed(2)}). Regime: ${decision.regime}`,
+                    hadPosition: true,
+                    positionSide: existingPosition.side,
+                    positionPnlPct: ((currentPrice - existingPosition.entryPrice) / existingPosition.entryPrice * 100 * (existingPosition.side === 'LONG' ? 1 : -1)),
+                    executed: true,
+                    result: `Closed ${existingPosition.side} for PnL: ${executedTrade?.pnl?.toFixed(2) || '?'}`,
+                });
+
+                await saveShadowPortfolioState(portfolio);
+
+                return NextResponse.json({
+                    success: true,
+                    symbol,
+                    price: currentPrice,
+                    decision: 'SL_TP_CLOSE',
+                    reason: closeReason,
+                    actionTaken,
+                    regime: decision.regime,
+                    regimeReason: decision.regimeReason,
+                    balance: portfolio.balance
+                });
+            }
+        }
+
+        // ─── 5c. Execute trading decision ────────────────────────
+        const currentPosition = portfolio.positions.find(p => p.symbol === symbol);
+
+        // BUY
+        if (decision.action === 'BUY') {
+            if (currentPosition && currentPosition.side === 'SHORT') {
+                portfolio = closePosition(portfolio, currentPosition.id, currentPrice);
+                executedTrade = portfolio.trades[portfolio.trades.length - 1];
                 actionTaken = 'CLOSE_SHORT';
+
+                if (executedTrade) {
+                    await saveShadowTrade(executedTrade, JSON.stringify({
+                        score: decision.score,
+                        reason: decision.reason,
+                        regime: decision.regime,
+                        timestamp: decision.timestamp
+                    }));
+                }
             }
 
             const isFlat = !portfolio.positions.some(p => p.symbol === symbol);
             if (isFlat) {
                 const q = (portfolio.balance * 0.95) / currentPrice;
-                if (q > 0) {
+                if (q > 0 && portfolio.balance > 10) {
+                    const sl = currentPrice * (1 - SL_PCT);
+                    const tp = currentPrice * (1 + TP_PCT);
                     portfolio = openPosition(portfolio, {
                         symbol,
                         side: 'LONG',
                         quantity: q,
                         entryPrice: currentPrice,
-                        stopLoss: null,
-                        takeProfit: null
+                        stopLoss: sl,
+                        takeProfit: tp,
                     });
                     actionTaken = actionTaken === 'NONE' ? 'OPEN_LONG' : 'REVERSE_LONG';
                 }
             }
         }
-        // Selling
+        // SELL
         else if (decision.action === 'SELL') {
-            if (existingPosition && existingPosition.side === 'LONG') {
-                portfolio = closePosition(portfolio, existingPosition.id, currentPrice);
+            if (currentPosition && currentPosition.side === 'LONG') {
+                portfolio = closePosition(portfolio, currentPosition.id, currentPrice);
                 executedTrade = portfolio.trades[portfolio.trades.length - 1];
                 actionTaken = 'CLOSE_LONG';
+
+                if (executedTrade) {
+                    await saveShadowTrade(executedTrade, JSON.stringify({
+                        score: decision.score,
+                        reason: decision.reason,
+                        regime: decision.regime,
+                        timestamp: decision.timestamp
+                    }));
+                }
             }
 
             const isFlat = !portfolio.positions.some(p => p.symbol === symbol);
             if (isFlat) {
                 const q = (portfolio.balance * 0.95) / currentPrice;
-                if (q > 0) {
+                if (q > 0 && portfolio.balance > 10) {
+                    const sl = currentPrice * (1 + SL_PCT);
+                    const tp = currentPrice * (1 - TP_PCT);
                     portfolio = openPosition(portfolio, {
                         symbol,
                         side: 'SHORT',
                         quantity: q,
                         entryPrice: currentPrice,
-                        stopLoss: null,
-                        takeProfit: null
+                        stopLoss: sl,
+                        takeProfit: tp,
                     });
                     actionTaken = actionTaken === 'NONE' ? 'OPEN_SHORT' : 'REVERSE_SHORT';
                 }
             }
         }
 
-        // 6. Persist
+        // 6. Persist portfolio
         if (actionTaken !== 'NONE') {
             await saveShadowPortfolioState(portfolio);
-            if (executedTrade) {
-                const snapshot = JSON.stringify({
-                    score: decision.score,
-                    reason: decision.reason,
-                    timestamp: decision.timestamp
-                });
-                await saveShadowTrade(executedTrade, snapshot);
-            }
         }
+
+        // 7. Log every decision (even HOLD)
+        const pnlPct = currentPosition
+            ? ((currentPrice - currentPosition.entryPrice) / currentPosition.entryPrice * 100 * (currentPosition.side === 'LONG' ? 1 : -1))
+            : undefined;
+
+        await saveShadowDecision({
+            timestamp: Date.now(),
+            symbol,
+            action: decision.action,
+            score: decision.score,
+            reason: `${decision.reason} | Regime: ${decision.regime} — ${decision.regimeReason}`,
+            hadPosition: !!currentPosition,
+            positionSide: currentPosition?.side,
+            positionPnlPct: pnlPct,
+            executed: actionTaken !== 'NONE',
+            result: actionTaken !== 'NONE'
+                ? `${actionTaken} at $${currentPrice.toFixed(2)}`
+                : (currentPosition ? `Holding ${currentPosition.side}` : 'No position, waiting'),
+        });
 
         return NextResponse.json({
             success: true,
             symbol,
             price: currentPrice,
             decision: decision.action,
+            score: decision.score,
             reason: decision.reason,
+            regime: decision.regime,
+            regimeReason: decision.regimeReason,
             actionTaken,
             balance: portfolio.balance
         });

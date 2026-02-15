@@ -1,5 +1,6 @@
 
 import { SignalResult, SignalDirection } from './types';
+import { RegimeLabel } from './RegimeLabeler';
 
 export interface TradeDecision {
     action: 'BUY' | 'SELL' | 'HOLD';
@@ -7,6 +8,8 @@ export interface TradeDecision {
     reason: string;
     score: number; // -1.0 to 1.0
     timestamp: number;
+    regime?: RegimeLabel;       // Context only — does not trade
+    regimeReason?: string;
 }
 
 export class Resolver {

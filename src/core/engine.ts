@@ -3,9 +3,8 @@ import { Candle } from '@/core/market/types';
 import { TrendSignal } from '@/core/signals/TrendSignal';
 import { RsiSignal } from '@/core/signals/RsiSignal';
 import { VolatilitySignal } from '@/core/signals/VolatilitySignal';
-// MacroSignal is manual, so for Cron we might need to fetch it from DB or defaults to NEUTRAL?
-// Or we can store Macro state in DB?
 import { Resolver, TradeDecision } from '@/core/signals/Resolver';
+import { RegimeLabeler } from '@/core/signals/RegimeLabeler';
 import { SignalResult } from '@/core/signals/types';
 
 export class TradingEngine {
@@ -13,7 +12,6 @@ export class TradingEngine {
         new TrendSignal(),
         new RsiSignal(),
         new VolatilitySignal(),
-        // TODO: MacroSignal needs state. For now, we omit it or assume Neutral.
     ];
 
     public evaluate(candles: Candle[], symbol: string, macroSentiment: 'RISK_ON' | 'RISK_OFF' | 'NEUTRAL' = 'NEUTRAL'): TradeDecision {
@@ -32,10 +30,17 @@ export class TradingEngine {
             direction: macroSentiment === 'RISK_ON' ? 'LONG' : (macroSentiment === 'RISK_OFF' ? 'SHORT' : 'NEUTRAL'),
             confidence: 1.0,
             horizon: 'SWING',
-            reason: `Manual Overrride: ${macroSentiment}`,
+            reason: `Manual Override: ${macroSentiment}`,
             timestamp: Date.now()
         });
 
-        return Resolver.resolve(results);
+        const decision = Resolver.resolve(results);
+
+        // Regime labeling — context only, does not influence BUY/SELL/HOLD
+        const regime = RegimeLabeler.label(candles);
+        decision.regime = regime.label;
+        decision.regimeReason = regime.reason;
+
+        return decision;
     }
 }
