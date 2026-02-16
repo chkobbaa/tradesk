@@ -135,6 +135,7 @@ export default function ChatWidget() {
     const mediaStreamRef = useRef<MediaStream | null>(null);
     const voiceChunksRef = useRef<Blob[]>([]);
     const voiceRecordingStartedAtRef = useRef(0);
+    const voiceCaptureRetriedRef = useRef(false);
     const loadInFlightRef = useRef<Map<string, boolean>>(new Map());
     const audioElementsRef = useRef<Map<number, HTMLAudioElement>>(new Map());
     const seekingAudioIdRef = useRef<number | null>(null);
@@ -654,11 +655,16 @@ export default function ChatWidget() {
                 if (recorder.state !== 'inactive') {
                     recorder.stop();
                 }
-            }, 120);
+            }, 360);
         }
     }, []);
 
-    const getOrCreateMicrophoneStream = useCallback(async () => {
+    const getOrCreateMicrophoneStream = useCallback(async (forceFresh?: boolean) => {
+        if (forceFresh && mediaStreamRef.current) {
+            mediaStreamRef.current.getTracks().forEach(track => track.stop());
+            mediaStreamRef.current = null;
+        }
+
         const existing = mediaStreamRef.current;
         if (existing && existing.getAudioTracks().some(track => track.readyState === 'live')) {
             return existing;
@@ -690,7 +696,7 @@ export default function ChatWidget() {
         };
     }, [recordingVoice, stopVoiceRecording]);
 
-    const startVoiceRecording = useCallback(async () => {
+    const startVoiceRecording = useCallback(async (forceFreshStream: boolean = false) => {
         if (recordingVoice || uploading) return;
         if (normalizedToId.length !== 6) {
             setError('Choose a recipient before recording voice messages');
@@ -703,7 +709,11 @@ export default function ChatWidget() {
         }
 
         try {
-            const stream = await getOrCreateMicrophoneStream();
+            const stream = await getOrCreateMicrophoneStream(forceFreshStream);
+
+            if (!forceFreshStream) {
+                voiceCaptureRetriedRef.current = false;
+            }
 
             const useAppleCompatibleOrder = detectAppleWebKitClient() || detectStandaloneDisplayMode();
             const preferredMimeTypes = useAppleCompatibleOrder
@@ -753,9 +763,23 @@ export default function ChatWidget() {
                 setRecordingMs(0);
 
                 if (chunks.length === 0) {
+                    if (!voiceCaptureRetriedRef.current) {
+                        voiceCaptureRetriedRef.current = true;
+                        if (mediaStreamRef.current) {
+                            mediaStreamRef.current.getTracks().forEach(track => track.stop());
+                            mediaStreamRef.current = null;
+                        }
+                        setError('No audio captured, retrying with a fresh microphone stream…');
+                        window.setTimeout(() => {
+                            void startVoiceRecording(true);
+                        }, 120);
+                        return;
+                    }
                     setError('No audio captured. Please hold record a bit longer and try again.');
                     return;
                 }
+
+                voiceCaptureRetriedRef.current = false;
 
                 const mimeType = recorder.mimeType || 'audio/webm';
                 const blob = new Blob(chunks, { type: mimeType });
@@ -774,7 +798,7 @@ export default function ChatWidget() {
                 await uploadFile(file);
             };
 
-            recorder.start(300);
+            recorder.start(100);
             voiceRecordingStartedAtRef.current = Date.now();
             setRecordingVoice(true);
             setRecordingMs(0);
