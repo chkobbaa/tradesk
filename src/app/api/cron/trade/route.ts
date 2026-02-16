@@ -10,6 +10,7 @@ import { sendPushNotification } from '@/lib/notify';
 const MAX_HOLD_MS = 4 * 60 * 60 * 1000; // 4 hours max hold
 const SL_PCT = 0.015; // 1.5% stop loss
 const TP_PCT = 0.030; // 3.0% take profit (2:1 R:R)
+const SYSTEM_USER_ID = 'system-cron-bot';
 
 export async function GET(req: NextRequest) {
     // 1. Security Check
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest) {
         const decision = engine.evaluate(candles, symbol, 'NEUTRAL');
 
         // 4. Load Portfolio (Shadow)
-        const portfolioState = await loadShadowPortfolioState();
+        const portfolioState = await loadShadowPortfolioState(SYSTEM_USER_ID);
         let portfolio = {
             balance: portfolioState.balance,
             positions: portfolioState.positions,
@@ -56,7 +57,7 @@ export async function GET(req: NextRequest) {
             actionTaken = 'TIMEOUT_CLOSE';
 
             if (executedTrade) {
-                await saveShadowTrade(executedTrade, JSON.stringify({
+                await saveShadowTrade(SYSTEM_USER_ID, executedTrade, JSON.stringify({
                     score: 0,
                     reason: `Timeout: held for ${Math.round(duration / 60000)}m`,
                     regime: decision.regime,
@@ -72,7 +73,7 @@ export async function GET(req: NextRequest) {
                 );
             }
 
-            await saveShadowDecision({
+            await saveShadowDecision(SYSTEM_USER_ID, {
                 timestamp: Date.now(),
                 symbol,
                 action: 'TIMEOUT_CLOSE',
@@ -85,7 +86,7 @@ export async function GET(req: NextRequest) {
                 result: `Closed ${existingPosition.side} for PnL: ${executedTrade?.pnl?.toFixed(2) || '?'}`,
             });
 
-            await saveShadowPortfolioState(portfolio);
+            await saveShadowPortfolioState(SYSTEM_USER_ID, portfolio);
 
             return NextResponse.json({
                 success: true,
@@ -136,7 +137,7 @@ export async function GET(req: NextRequest) {
                 actionTaken = 'SL_TP_CLOSE';
 
                 if (executedTrade) {
-                    await saveShadowTrade(executedTrade, JSON.stringify({
+                    await saveShadowTrade(SYSTEM_USER_ID, executedTrade, JSON.stringify({
                         score: 0,
                         reason: closeReason,
                         regime: decision.regime,
@@ -152,7 +153,7 @@ export async function GET(req: NextRequest) {
                     );
                 }
 
-                await saveShadowDecision({
+                await saveShadowDecision(SYSTEM_USER_ID, {
                     timestamp: Date.now(),
                     symbol,
                     action: 'SL_TP_CLOSE',
@@ -165,7 +166,7 @@ export async function GET(req: NextRequest) {
                     result: `Closed ${existingPosition.side} for PnL: ${executedTrade?.pnl?.toFixed(2) || '?'}`,
                 });
 
-                await saveShadowPortfolioState(portfolio);
+                await saveShadowPortfolioState(SYSTEM_USER_ID, portfolio);
 
                 return NextResponse.json({
                     success: true,
@@ -192,7 +193,7 @@ export async function GET(req: NextRequest) {
                 actionTaken = 'CLOSE_SHORT';
 
                 if (executedTrade) {
-                    await saveShadowTrade(executedTrade, JSON.stringify({
+                    await saveShadowTrade(SYSTEM_USER_ID, executedTrade, JSON.stringify({
                         score: decision.score,
                         reason: decision.reason,
                         regime: decision.regime,
@@ -240,7 +241,7 @@ export async function GET(req: NextRequest) {
                 actionTaken = 'CLOSE_LONG';
 
                 if (executedTrade) {
-                    await saveShadowTrade(executedTrade, JSON.stringify({
+                    await saveShadowTrade(SYSTEM_USER_ID, executedTrade, JSON.stringify({
                         score: decision.score,
                         reason: decision.reason,
                         regime: decision.regime,
@@ -283,7 +284,7 @@ export async function GET(req: NextRequest) {
 
         // 6. Persist portfolio
         if (actionTaken !== 'NONE') {
-            await saveShadowPortfolioState(portfolio);
+            await saveShadowPortfolioState(SYSTEM_USER_ID, portfolio);
         }
 
         // 7. Log every decision (even HOLD)
@@ -291,7 +292,7 @@ export async function GET(req: NextRequest) {
             ? ((currentPrice - currentPosition.entryPrice) / currentPosition.entryPrice * 100 * (currentPosition.side === 'LONG' ? 1 : -1))
             : undefined;
 
-        await saveShadowDecision({
+        await saveShadowDecision(SYSTEM_USER_ID, {
             timestamp: Date.now(),
             symbol,
             action: decision.action,

@@ -26,6 +26,7 @@ export async function ensureSchema(): Promise<void> {
         await client.execute(`
             CREATE TABLE IF NOT EXISTS trades (
                 id TEXT PRIMARY KEY,
+                user_id TEXT,
                 symbol TEXT NOT NULL,
                 side TEXT NOT NULL CHECK(side IN ('LONG', 'SHORT')),
                 entry_price REAL NOT NULL,
@@ -53,6 +54,15 @@ export async function ensureSchema(): Promise<void> {
             )
         `);
 
+        await client.execute(`
+            CREATE TABLE IF NOT EXISTS portfolio_state_user (
+                user_id TEXT PRIMARY KEY,
+                balance REAL NOT NULL DEFAULT 10000,
+                positions_json TEXT DEFAULT '[]',
+                updated_at TEXT DEFAULT (datetime('now'))
+            )
+        `);
+
         // Seed portfolio if empty
         await client.execute(`
             INSERT OR IGNORE INTO portfolio_state (id, balance) VALUES (1, 10000)
@@ -62,12 +72,21 @@ export async function ensureSchema(): Promise<void> {
         await client.execute(`CREATE INDEX IF NOT EXISTS idx_trades_symbol ON trades(symbol)`);
         await client.execute(`CREATE INDEX IF NOT EXISTS idx_trades_close_time ON trades(close_time)`);
 
+        try {
+            await client.execute(`ALTER TABLE trades ADD COLUMN user_id TEXT`);
+        } catch {
+            // Column already exists.
+        }
+
+        await client.execute(`CREATE INDEX IF NOT EXISTS idx_trades_user_id ON trades(user_id)`);
+
         // ─── Shadow Mode ─────────────────────────────────────────────
 
         // Shadow Trades
         await client.execute(`
             CREATE TABLE IF NOT EXISTS shadow_trades (
                 id TEXT PRIMARY KEY,
+                user_id TEXT,
                 symbol TEXT NOT NULL,
                 side TEXT NOT NULL,
                 entry_price REAL NOT NULL,
@@ -89,10 +108,27 @@ export async function ensureSchema(): Promise<void> {
         await client.execute(`CREATE INDEX IF NOT EXISTS idx_shadow_trades_symbol ON shadow_trades(symbol)`);
         await client.execute(`CREATE INDEX IF NOT EXISTS idx_shadow_trades_close_time ON shadow_trades(close_time)`);
 
+        try {
+            await client.execute(`ALTER TABLE shadow_trades ADD COLUMN user_id TEXT`);
+        } catch {
+            // Column already exists.
+        }
+
+        await client.execute(`CREATE INDEX IF NOT EXISTS idx_shadow_trades_user_id ON shadow_trades(user_id)`);
+
         // Shadow Portfolio
         await client.execute(`
             CREATE TABLE IF NOT EXISTS shadow_portfolio_state (
                 id INTEGER PRIMARY KEY CHECK(id = 1),
+                balance REAL NOT NULL DEFAULT 10000,
+                positions_json TEXT DEFAULT '[]',
+                updated_at TEXT DEFAULT (datetime('now'))
+            )
+        `);
+
+        await client.execute(`
+            CREATE TABLE IF NOT EXISTS shadow_portfolio_state_user (
+                user_id TEXT PRIMARY KEY,
                 balance REAL NOT NULL DEFAULT 10000,
                 positions_json TEXT DEFAULT '[]',
                 updated_at TEXT DEFAULT (datetime('now'))
@@ -108,6 +144,7 @@ export async function ensureSchema(): Promise<void> {
         await client.execute(`
             CREATE TABLE IF NOT EXISTS shadow_decisions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT,
                 timestamp INTEGER NOT NULL,
                 symbol TEXT NOT NULL,
                 action TEXT NOT NULL,
@@ -123,6 +160,14 @@ export async function ensureSchema(): Promise<void> {
         `);
 
         await client.execute(`CREATE INDEX IF NOT EXISTS idx_shadow_decisions_ts ON shadow_decisions(timestamp)`);
+
+        try {
+            await client.execute(`ALTER TABLE shadow_decisions ADD COLUMN user_id TEXT`);
+        } catch {
+            // Column already exists.
+        }
+
+        await client.execute(`CREATE INDEX IF NOT EXISTS idx_shadow_decisions_user_id ON shadow_decisions(user_id)`);
 
         // ─── Push Notifications ──────────────────────────────────────
 

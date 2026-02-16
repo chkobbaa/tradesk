@@ -2,15 +2,20 @@ import { NextResponse } from 'next/server';
 import { getShadowTradeStats, getShadowEquityCurve, getShadowTrades, loadShadowPortfolioState, getShadowDecisions } from '@/db';
 import { fetchBinanceCandles } from '@/lib/binance';
 import { RegimeLabeler } from '@/core/signals/RegimeLabeler';
+import { NextRequest } from 'next/server';
+import { resolveChatIdentity, setChatIdentityCookie } from '@/lib/chatIdentity';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+    let identity: Awaited<ReturnType<typeof resolveChatIdentity>> | null = null;
     try {
+        identity = await resolveChatIdentity(req);
+
         const [stats, equity, trades, portfolio, decisions] = await Promise.all([
-            getShadowTradeStats(),
-            getShadowEquityCurve(),
-            getShadowTrades(),
-            loadShadowPortfolioState(),
-            getShadowDecisions(30),
+            getShadowTradeStats(identity.userId),
+            getShadowEquityCurve(identity.userId),
+            getShadowTrades(identity.userId),
+            loadShadowPortfolioState(identity.userId),
+            getShadowDecisions(identity.userId, 30),
         ]);
 
         const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
@@ -35,7 +40,7 @@ export async function GET() {
             ? RegimeLabeler.label(btcCandles)
             : { label: 'UNCLEAR', reason: 'No candle data', confidence: 0 };
 
-        return NextResponse.json({
+        const res = NextResponse.json({
             stats,
             equity,
             recentTrades: trades.slice(0, 50),
@@ -45,10 +50,18 @@ export async function GET() {
             currentPrice,
             prices,
         });
+        if (identity.shouldSetCookie) {
+            setChatIdentityCookie(res, identity.deviceId);
+        }
+        return res;
     } catch (err) {
-        return NextResponse.json(
+        const res = NextResponse.json(
             { error: err instanceof Error ? err.message : 'DB error' },
             { status: 500 }
         );
+        if (identity?.shouldSetCookie) {
+            setChatIdentityCookie(res, identity.deviceId);
+        }
+        return res;
     }
 }

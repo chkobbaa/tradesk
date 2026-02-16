@@ -16,18 +16,19 @@ async function qs() {
 
 // ─── Trades ────────────────────────────────────────────────────
 
-export async function saveTrade(trade: Trade, indicatorSnapshot?: string): Promise<void> {
+export async function saveTrade(userId: string, trade: Trade, indicatorSnapshot?: string): Promise<void> {
     const db = await qs();
     await db.execute({
         sql: `
             INSERT OR REPLACE INTO trades
-            (id, symbol, side, entry_price, exit_price, quantity,
+            (id, user_id, symbol, side, entry_price, exit_price, quantity,
              stop_loss, take_profit, open_time, close_time,
              entry_fee, exit_fee, pnl, indicator_snapshot)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         args: [
             trade.id,
+            userId,
             trade.symbol,
             trade.side,
             trade.entryPrice,
@@ -45,18 +46,19 @@ export async function saveTrade(trade: Trade, indicatorSnapshot?: string): Promi
     });
 }
 
-export async function saveShadowTrade(trade: Trade, indicatorSnapshot?: string): Promise<void> {
+export async function saveShadowTrade(userId: string, trade: Trade, indicatorSnapshot?: string): Promise<void> {
     const db = await qs();
     await db.execute({
         sql: `
             INSERT OR REPLACE INTO shadow_trades
-            (id, symbol, side, entry_price, exit_price, quantity,
+            (id, user_id, symbol, side, entry_price, exit_price, quantity,
              stop_loss, take_profit, open_time, close_time,
              entry_fee, exit_fee, pnl, indicator_snapshot)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         args: [
             trade.id,
+            userId,
             trade.symbol,
             trade.side,
             trade.entryPrice,
@@ -74,31 +76,32 @@ export async function saveShadowTrade(trade: Trade, indicatorSnapshot?: string):
     });
 }
 
-export async function getTrades(symbol?: string): Promise<Trade[]> {
+export async function getTrades(userId: string, symbol?: string): Promise<Trade[]> {
     const db = await qs();
     const sql = symbol
-        ? 'SELECT * FROM trades WHERE symbol = ? ORDER BY close_time DESC'
-        : 'SELECT * FROM trades ORDER BY close_time DESC';
+        ? 'SELECT * FROM trades WHERE user_id = ? AND symbol = ? ORDER BY close_time DESC'
+        : 'SELECT * FROM trades WHERE user_id = ? ORDER BY close_time DESC';
 
-    const args = symbol ? [symbol] : [];
+    const args = symbol ? [userId, symbol] : [userId];
     const rs = await db.execute({ sql, args });
 
     return rs.rows.map(rowToTrade);
 }
 
-export async function getShadowTrades(symbol?: string): Promise<Trade[]> {
+export async function getShadowTrades(userId: string, symbol?: string): Promise<Trade[]> {
     const db = await qs();
     const sql = symbol
-        ? 'SELECT * FROM shadow_trades WHERE symbol = ? ORDER BY close_time DESC'
-        : 'SELECT * FROM shadow_trades ORDER BY close_time DESC';
-    const args = symbol ? [symbol] : [];
+        ? 'SELECT * FROM shadow_trades WHERE user_id = ? AND symbol = ? ORDER BY close_time DESC'
+        : 'SELECT * FROM shadow_trades WHERE user_id = ? ORDER BY close_time DESC';
+    const args = symbol ? [userId, symbol] : [userId];
     const rs = await db.execute({ sql, args });
     return rs.rows.map(rowToTrade);
 }
 
-export async function getTradeStats() {
+export async function getTradeStats(userId: string) {
     const db = await qs();
-    const rs = await db.execute(`
+    const rs = await db.execute({
+        sql: `
         SELECT
             COUNT(*) as total,
             SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END) as wins,
@@ -109,7 +112,10 @@ export async function getTradeStats() {
             MAX(pnl) as best_trade,
             MIN(pnl) as worst_trade
         FROM trades
-    `);
+        WHERE user_id = ?
+    `,
+        args: [userId],
+    });
 
     const row = rs.rows[0];
     const total = Number(row.total || 0);
@@ -129,9 +135,12 @@ export async function getTradeStats() {
 }
 
 /** Compute equity curve: cumulative balance after each trade */
-export async function getEquityCurve(startingBalance: number = 10000) {
+export async function getEquityCurve(userId: string, startingBalance: number = 10000) {
     const db = await qs();
-    const rs = await db.execute('SELECT close_time, pnl FROM trades ORDER BY close_time ASC');
+    const rs = await db.execute({
+        sql: 'SELECT close_time, pnl FROM trades WHERE user_id = ? ORDER BY close_time ASC',
+        args: [userId],
+    });
 
     let balance = startingBalance;
     const points: { time: number; balance: number }[] = [];
@@ -144,8 +153,8 @@ export async function getEquityCurve(startingBalance: number = 10000) {
 }
 
 /** Compute max drawdown from equity curve */
-export async function getDrawdownData(startingBalance: number = 10000) {
-    const curve = await getEquityCurve(startingBalance);
+export async function getDrawdownData(userId: string, startingBalance: number = 10000) {
+    const curve = await getEquityCurve(userId, startingBalance);
     let peak = startingBalance;
     let maxDrawdown = 0;
 
@@ -158,9 +167,10 @@ export async function getDrawdownData(startingBalance: number = 10000) {
 }
 
 /** Per-symbol breakdown */
-export async function getSymbolStats() {
+export async function getSymbolStats(userId: string) {
     const db = await qs();
-    const rs = await db.execute(`
+    const rs = await db.execute({
+        sql: `
         SELECT
             symbol,
             COUNT(*) as trades,
@@ -168,9 +178,12 @@ export async function getSymbolStats() {
             SUM(pnl) as total_pnl,
             AVG(pnl) as avg_pnl
         FROM trades
+        WHERE user_id = ?
         GROUP BY symbol
         ORDER BY total_pnl DESC
-    `);
+    `,
+        args: [userId],
+    });
 
     return rs.rows.map(row => ({
         symbol: row.symbol as string,
@@ -183,39 +196,52 @@ export async function getSymbolStats() {
 
 // ─── Portfolio State ───────────────────────────────────────────
 
-export async function savePortfolioState(portfolio: Portfolio): Promise<void> {
+export async function savePortfolioState(userId: string, portfolio: Portfolio): Promise<void> {
     const db = await qs();
     await db.execute({
         sql: `
-            UPDATE portfolio_state
-            SET balance = ?, positions_json = ?, updated_at = datetime('now')
-            WHERE id = 1
+            INSERT INTO portfolio_state_user (user_id, balance, positions_json, updated_at)
+            VALUES (?, ?, ?, datetime('now'))
+            ON CONFLICT(user_id)
+            DO UPDATE SET
+                balance = excluded.balance,
+                positions_json = excluded.positions_json,
+                updated_at = datetime('now')
         `,
         args: [
+            userId,
             portfolio.balance,
             JSON.stringify(portfolio.positions),
         ]
     });
 }
 
-export async function saveShadowPortfolioState(portfolio: Portfolio): Promise<void> {
+export async function saveShadowPortfolioState(userId: string, portfolio: Portfolio): Promise<void> {
     const db = await qs();
     await db.execute({
         sql: `
-            UPDATE shadow_portfolio_state
-            SET balance = ?, positions_json = ?
-            WHERE id = 1
+            INSERT INTO shadow_portfolio_state_user (user_id, balance, positions_json, updated_at)
+            VALUES (?, ?, ?, datetime('now'))
+            ON CONFLICT(user_id)
+            DO UPDATE SET
+                balance = excluded.balance,
+                positions_json = excluded.positions_json,
+                updated_at = datetime('now')
         `,
         args: [
+            userId,
             portfolio.balance,
             JSON.stringify(portfolio.positions),
         ]
     });
 }
 
-export async function loadPortfolioState(): Promise<{ balance: number; positions: Position[] }> {
+export async function loadPortfolioState(userId: string): Promise<{ balance: number; positions: Position[] }> {
     const db = await qs();
-    const rs = await db.execute('SELECT balance, positions_json FROM portfolio_state WHERE id = 1');
+    const rs = await db.execute({
+        sql: 'SELECT balance, positions_json FROM portfolio_state_user WHERE user_id = ? LIMIT 1',
+        args: [userId],
+    });
     const row = rs.rows[0];
 
     if (!row) return { balance: 10000, positions: [] };
@@ -225,9 +251,12 @@ export async function loadPortfolioState(): Promise<{ balance: number; positions
     };
 }
 
-export async function loadShadowPortfolioState(): Promise<{ balance: number; positions: Position[] }> {
+export async function loadShadowPortfolioState(userId: string): Promise<{ balance: number; positions: Position[] }> {
     const db = await qs();
-    const rs = await db.execute('SELECT balance, positions_json FROM shadow_portfolio_state WHERE id = 1');
+    const rs = await db.execute({
+        sql: 'SELECT balance, positions_json FROM shadow_portfolio_state_user WHERE user_id = ? LIMIT 1',
+        args: [userId],
+    });
     const row = rs.rows[0];
 
     if (!row) return { balance: 10000, positions: [] };
@@ -239,18 +268,22 @@ export async function loadShadowPortfolioState(): Promise<{ balance: number; pos
 
 // ─── Daily PnL ─────────────────────────────────────────────────
 
-export async function getDailyPnL(table: 'trades' | 'shadow_trades' = 'trades') {
+export async function getDailyPnL(userId: string, table: 'trades' | 'shadow_trades' = 'trades') {
     const db = await qs();
-    const rs = await db.execute(`
+    const rs = await db.execute({
+        sql: `
         SELECT
             date(close_time / 1000, 'unixepoch') as day,
             SUM(pnl) as daily_pnl,
             COUNT(*) as trade_count,
             SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END) as wins
         FROM ${table}
+        WHERE user_id = ?
         GROUP BY day
         ORDER BY day ASC
-    `);
+    `,
+        args: [userId],
+    });
 
     return rs.rows.map(row => ({
         day: row.day as string,
@@ -262,9 +295,12 @@ export async function getDailyPnL(table: 'trades' | 'shadow_trades' = 'trades') 
 
 // ─── PnL Distribution ─────────────────────────────────────────
 
-export async function getPnLDistribution(table: 'trades' | 'shadow_trades' = 'trades') {
+export async function getPnLDistribution(userId: string, table: 'trades' | 'shadow_trades' = 'trades') {
     const db = await qs();
-    const rs = await db.execute(`SELECT pnl FROM ${table} ORDER BY pnl ASC`);
+    const rs = await db.execute({
+        sql: `SELECT pnl FROM ${table} WHERE user_id = ? ORDER BY pnl ASC`,
+        args: [userId],
+    });
 
     const values = rs.rows.map(r => Number(r.pnl));
     if (values.length === 0) return [];
@@ -294,9 +330,10 @@ export async function getPnLDistribution(table: 'trades' | 'shadow_trades' = 'tr
 
 // ─── Shadow Trade Stats ───────────────────────────────────────
 
-export async function getShadowTradeStats() {
+export async function getShadowTradeStats(userId: string) {
     const db = await qs();
-    const rs = await db.execute(`
+    const rs = await db.execute({
+        sql: `
         SELECT
             COUNT(*) as total,
             SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END) as wins,
@@ -307,7 +344,10 @@ export async function getShadowTradeStats() {
             MAX(pnl) as best_trade,
             MIN(pnl) as worst_trade
         FROM shadow_trades
-    `);
+        WHERE user_id = ?
+    `,
+        args: [userId],
+    });
 
     const row = rs.rows[0];
     const total = Number(row.total || 0);
@@ -328,9 +368,12 @@ export async function getShadowTradeStats() {
 
 // ─── Shadow Equity Curve ──────────────────────────────────────
 
-export async function getShadowEquityCurve(startingBalance: number = 10000) {
+export async function getShadowEquityCurve(userId: string, startingBalance: number = 10000) {
     const db = await qs();
-    const rs = await db.execute('SELECT close_time, pnl FROM shadow_trades ORDER BY close_time ASC');
+    const rs = await db.execute({
+        sql: 'SELECT close_time, pnl FROM shadow_trades WHERE user_id = ? ORDER BY close_time ASC',
+        args: [userId],
+    });
 
     let balance = startingBalance;
     const points: { time: number; balance: number }[] = [];
@@ -358,12 +401,13 @@ export interface ShadowDecisionLog {
     result?: string;
 }
 
-export async function saveShadowDecision(d: ShadowDecisionLog): Promise<void> {
+export async function saveShadowDecision(userId: string, d: ShadowDecisionLog): Promise<void> {
     const db = await qs();
     await db.execute({
-        sql: `INSERT INTO shadow_decisions (timestamp, symbol, action, score, reason, had_position, position_side, position_pnl_pct, executed, result)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        sql: `INSERT INTO shadow_decisions (user_id, timestamp, symbol, action, score, reason, had_position, position_side, position_pnl_pct, executed, result)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
+            userId,
             d.timestamp, d.symbol, d.action, d.score, d.reason,
             d.hadPosition ? 1 : 0, d.positionSide || null, d.positionPnlPct ?? null,
             d.executed ? 1 : 0, d.result || null,
@@ -371,11 +415,11 @@ export async function saveShadowDecision(d: ShadowDecisionLog): Promise<void> {
     });
 }
 
-export async function getShadowDecisions(limit: number = 50): Promise<ShadowDecisionLog[]> {
+export async function getShadowDecisions(userId: string, limit: number = 50): Promise<ShadowDecisionLog[]> {
     const db = await qs();
     const rs = await db.execute({
-        sql: `SELECT * FROM shadow_decisions ORDER BY timestamp DESC LIMIT ?`,
-        args: [limit],
+        sql: `SELECT * FROM shadow_decisions WHERE user_id = ? ORDER BY timestamp DESC LIMIT ?`,
+        args: [userId, limit],
     });
 
     return rs.rows.map(row => ({
