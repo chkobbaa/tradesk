@@ -73,7 +73,7 @@ export default function ChatWidget() {
     const [newContactName, setNewContactName] = useState('');
     const [newContactId, setNewContactId] = useState('');
     const [text, setText] = useState('');
-    const [selectedFileName, setSelectedFileName] = useState('No file selected');
+    const [selectedFileName, setSelectedFileName] = useState('');
     const [uploading, setUploading] = useState(false);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [error, setError] = useState<string | null>(null);
@@ -474,7 +474,7 @@ export default function ChatWidget() {
             setError(err instanceof Error ? err.message : 'Failed to upload file');
         } finally {
             setUploading(false);
-            setSelectedFileName('No file selected');
+            setSelectedFileName('');
             if (fileInputRef.current) {
                 fileInputRef.current.value = '';
             }
@@ -644,7 +644,7 @@ export default function ChatWidget() {
                         <input
                             ref={fileInputRef}
                             type="file"
-                            accept=".png,.jpg,.jpeg,.gif,.webp,.svg,.pdf,.txt,.md,.csv,.json,.zip,.rar,image/*,application/pdf,text/plain,text/markdown,text/csv,application/json,application/zip,application/x-rar-compressed,application/vnd.rar"
+                            accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.md,.csv,.json,.zip,.rar,image/*,application/pdf,text/plain,text/markdown,text/csv,application/json,application/zip,application/x-rar-compressed,application/vnd.rar"
                             className={styles.fileInputHidden}
                             onChange={(e) => {
                                 const file = e.target.files?.[0];
@@ -668,7 +668,7 @@ export default function ChatWidget() {
                                 </svg>
                             )}
                         </button>
-                        <span className={styles.fileName} title={selectedFileName}>{selectedFileName}</span>
+                        {selectedFileName && <span className={styles.fileName} title={selectedFileName}>{selectedFileName}</span>}
                         <textarea
                             className={styles.messageInput}
                             placeholder="Type message..."

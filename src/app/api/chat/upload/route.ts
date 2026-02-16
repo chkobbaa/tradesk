@@ -1,6 +1,3 @@
-import { mkdir, writeFile } from 'fs/promises';
-import path from 'path';
-import { randomUUID } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getChatContactDisplayName, saveChatAttachment, saveChatMessage } from '@/db';
 import { sendDirectChatPushNotification } from '@/lib/notify';
@@ -12,7 +9,7 @@ const ID_PATTERN = /^[a-z0-9]{6}$/;
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
 const ALLOWED_EXTENSIONS = new Set([
-    '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg',
+    '.png', '.jpg', '.jpeg', '.gif', '.webp',
     '.pdf', '.txt', '.md', '.csv', '.json',
     '.zip', '.rar',
 ]);
@@ -63,7 +60,9 @@ export async function POST(req: NextRequest) {
         }
 
         const originalName = sanitizeName(file.name || 'file');
-        const extension = path.extname(originalName).toLowerCase();
+        const extension = originalName.includes('.')
+            ? `.${originalName.split('.').pop()!.toLowerCase()}`
+            : '';
         const mimeType = (file.type || 'application/octet-stream').toLowerCase();
 
         if (!ALLOWED_EXTENSIONS.has(extension) || BLOCKED_EXTENSIONS.has(extension)) {
@@ -74,16 +73,10 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'File type is not allowed' }, { status: 400 });
         }
 
-        const uploadDir = path.join(process.cwd(), 'public', 'chat-uploads');
-        await mkdir(uploadDir, { recursive: true });
-
-        const storedName = `${Date.now()}-${randomUUID()}${extension}`;
-        const filePath = path.join(uploadDir, storedName);
-
         const arrayBuffer = await file.arrayBuffer();
-        await writeFile(filePath, Buffer.from(arrayBuffer));
-
-        const fileUrl = `/chat-uploads/${storedName}`;
+        const buffer = Buffer.from(arrayBuffer);
+        const base64 = buffer.toString('base64');
+        const fileUrl = `data:${mimeType};base64,${base64}`;
         const messageText = `📎 ${originalName}`;
 
         const messageId = await saveChatMessage(identity.userId, toId, messageText);
