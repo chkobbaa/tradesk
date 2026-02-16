@@ -12,13 +12,14 @@ const ALLOWED_EXTENSIONS = new Set([
     '.png', '.jpg', '.jpeg', '.gif', '.webp',
     '.pdf', '.txt', '.md', '.csv', '.json',
     '.zip', '.rar',
+    '.webm', '.mp3', '.m4a', '.wav', '.ogg',
 ]);
 
 const BLOCKED_EXTENSIONS = new Set([
     '.exe', '.bat', '.cmd', '.msi', '.ps1', '.sh', '.php', '.js', '.jar', '.com', '.scr', '.vbs', '.hta', '.dll',
 ]);
 
-const ALLOWED_MIME_PREFIXES = ['image/'];
+const ALLOWED_MIME_PREFIXES = ['image/', 'audio/'];
 const ALLOWED_MIME_TYPES = new Set([
     'application/pdf',
     'text/plain',
@@ -28,6 +29,11 @@ const ALLOWED_MIME_TYPES = new Set([
     'application/zip',
     'application/x-rar-compressed',
     'application/vnd.rar',
+    'audio/webm',
+    'audio/mpeg',
+    'audio/mp4',
+    'audio/wav',
+    'audio/ogg',
 ]);
 
 function isAllowedMime(mimeType: string): boolean {

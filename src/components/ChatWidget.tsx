@@ -89,10 +89,14 @@ export default function ChatWidget() {
     const [pushEnabled, setPushEnabled] = useState(false);
     const [unreadCount, setUnreadCount] = useState(0);
     const [fullscreen, setFullscreen] = useState(false);
+    const [recordingVoice, setRecordingVoice] = useState(false);
     const listRef = useRef<HTMLDivElement>(null);
     const panelRef = useRef<HTMLElement>(null);
     const fabRef = useRef<HTMLButtonElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const mediaStreamRef = useRef<MediaStream | null>(null);
+    const voiceChunksRef = useRef<Blob[]>([]);
     const messageCacheRef = useRef<Map<string, ChatMessage[]>>(new Map());
     const prefetchedContactsRef = useRef<Set<string>>(new Set());
     const cacheHydratedRef = useRef(false);
@@ -389,7 +393,7 @@ export default function ChatWidget() {
             setMessages(cached);
         }
 
-        void loadMessages(normalizedToId);
+        void loadMessages(normalizedToId, { silent: true });
     }, [loadMessages, normalizedToId]);
 
     useEffect(() => {
@@ -399,10 +403,10 @@ export default function ChatWidget() {
 
         const safeLoad = async () => {
             if (!isActive) return;
-            await loadMessages();
+            await loadMessages(undefined, { silent: true });
         };
 
-        const timer = setInterval(safeLoad, open ? 2000 : 5000);
+        const timer = setInterval(safeLoad, open ? 10000 : 20000);
 
         return () => {
             isActive = false;
@@ -577,6 +581,115 @@ export default function ChatWidget() {
             setError(err instanceof Error ? err.message : 'Failed to send message');
         }
     };
+
+    const stopVoiceRecording = useCallback(() => {
+        const recorder = mediaRecorderRef.current;
+        if (!recorder) return;
+
+        if (recorder.state !== 'inactive') {
+            recorder.stop();
+        }
+    }, []);
+
+    const startVoiceRecording = useCallback(async () => {
+        if (recordingVoice || uploading) return;
+        if (normalizedToId.length !== 6) {
+            setError('Choose a recipient before recording voice messages');
+            return;
+        }
+
+        if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+            setError('Voice recording is not supported on this device');
+            return;
+        }
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaStreamRef.current = stream;
+
+            const preferredMimeTypes = [
+                'audio/webm;codecs=opus',
+                'audio/webm',
+                'audio/mp4',
+                'audio/ogg',
+            ];
+
+            const selectedMimeType = preferredMimeTypes.find(type =>
+                typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(type)
+            );
+
+            const recorder = selectedMimeType
+                ? new MediaRecorder(stream, { mimeType: selectedMimeType })
+                : new MediaRecorder(stream);
+
+            mediaRecorderRef.current = recorder;
+            voiceChunksRef.current = [];
+
+            recorder.ondataavailable = (event: BlobEvent) => {
+                if (event.data.size > 0) {
+                    voiceChunksRef.current.push(event.data);
+                }
+            };
+
+            recorder.onerror = () => {
+                setError('Voice recording failed');
+            };
+
+            recorder.onstop = async () => {
+                const chunks = [...voiceChunksRef.current];
+                voiceChunksRef.current = [];
+
+                if (mediaStreamRef.current) {
+                    mediaStreamRef.current.getTracks().forEach(track => track.stop());
+                    mediaStreamRef.current = null;
+                }
+
+                mediaRecorderRef.current = null;
+                setRecordingVoice(false);
+
+                if (chunks.length === 0) return;
+
+                const mimeType = recorder.mimeType || 'audio/webm';
+                const blob = new Blob(chunks, { type: mimeType });
+
+                const extension = mimeType.includes('mp4')
+                    ? '.m4a'
+                    : mimeType.includes('mpeg')
+                        ? '.mp3'
+                        : mimeType.includes('ogg')
+                            ? '.ogg'
+                            : mimeType.includes('wav')
+                                ? '.wav'
+                                : '.webm';
+
+                const file = new File([blob], `voice-${Date.now()}${extension}`, { type: mimeType });
+                await uploadFile(file);
+            };
+
+            recorder.start(300);
+            setRecordingVoice(true);
+            setError(null);
+        } catch {
+            if (mediaStreamRef.current) {
+                mediaStreamRef.current.getTracks().forEach(track => track.stop());
+                mediaStreamRef.current = null;
+            }
+            setRecordingVoice(false);
+            setError('Unable to access microphone');
+        }
+    }, [normalizedToId, recordingVoice, uploading]);
+
+    useEffect(() => {
+        return () => {
+            if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+                mediaRecorderRef.current.stop();
+            }
+            if (mediaStreamRef.current) {
+                mediaStreamRef.current.getTracks().forEach(track => track.stop());
+                mediaStreamRef.current = null;
+            }
+        };
+    }, []);
 
     const togglePush = async () => {
         if (!pushSupported || typeof window === 'undefined' || !('Notification' in window)) {
@@ -929,7 +1042,14 @@ export default function ChatWidget() {
                                         <div>{m.message}</div>
                                         {m.attachment && (
                                             <div className={styles.attachmentWrap}>
-                                                {m.attachment.mimeType.startsWith('image/') ? (
+                                                {m.attachment.mimeType.startsWith('audio/') ? (
+                                                    <audio
+                                                        className={styles.attachmentAudio}
+                                                        controls
+                                                        preload="metadata"
+                                                        src={m.attachment.fileUrl}
+                                                    />
+                                                ) : m.attachment.mimeType.startsWith('image/') ? (
                                                     <button
                                                         className={styles.attachmentPreviewBtn}
                                                         onClick={() => setPreviewAttachment(m.attachment || null)}
@@ -969,7 +1089,7 @@ export default function ChatWidget() {
                         <input
                             ref={fileInputRef}
                             type="file"
-                            accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.md,.csv,.json,.zip,.rar,image/*,application/pdf,text/plain,text/markdown,text/csv,application/json,application/zip,application/x-rar-compressed,application/vnd.rar"
+                            accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.md,.csv,.json,.zip,.rar,.webm,.mp3,.m4a,.wav,.ogg,image/*,audio/*,application/pdf,text/plain,text/markdown,text/csv,application/json,application/zip,application/x-rar-compressed,application/vnd.rar,audio/webm,audio/mpeg,audio/mp4,audio/wav,audio/ogg"
                             className={styles.fileInputHidden}
                             onChange={(e) => {
                                 const file = e.target.files?.[0];
@@ -992,6 +1112,22 @@ export default function ChatWidget() {
                                 </svg>
                             )}
                         </button>
+                        <button
+                            className={`${styles.btn} ${recordingVoice ? styles.iconBtnActive : ''}`}
+                            type="button"
+                            onClick={() => {
+                                if (recordingVoice) {
+                                    stopVoiceRecording();
+                                } else {
+                                    void startVoiceRecording();
+                                }
+                            }}
+                            disabled={uploading || normalizedToId.length !== 6}
+                            aria-label={recordingVoice ? 'Stop voice recording' : 'Record voice message'}
+                            title={recordingVoice ? 'Stop voice recording' : 'Record voice message'}
+                        >
+                            {recordingVoice ? '■' : '🎤'}
+                        </button>
                         <textarea
                             className={styles.messageInput}
                             placeholder="Type message..."
@@ -1005,7 +1141,7 @@ export default function ChatWidget() {
                                 }
                             }}
                         />
-                        <button className={styles.btnPrimary} onClick={sendMessage} disabled={uploading || text.trim().length === 0 || normalizedToId.length !== 6}>Send</button>
+                        <button className={styles.btnPrimary} onClick={sendMessage} disabled={uploading || recordingVoice || text.trim().length === 0 || normalizedToId.length !== 6}>Send</button>
                     </div>
                     <div className={styles.composerHint}>
                         Press Enter to send • Shift+Enter for a new line
