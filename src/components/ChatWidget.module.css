@@ -10,7 +10,22 @@
     color: var(--color-accent);
     font-size: 22px;
     box-shadow: var(--shadow-md);
+    transition: all var(--transition-normal);
     z-index: 130;
+}
+
+.chatFabOpen {
+    width: 86px;
+    height: 34px;
+    border-radius: 10px;
+    background: var(--color-bear-bg);
+    border-color: var(--color-bear-border);
+    color: var(--color-bear);
+    font-size: 12px;
+}
+
+.fabCloseLabel {
+    font-weight: 600;
 }
 
 .unreadBadge {
@@ -36,7 +51,7 @@
     right: 16px;
     bottom: 72px;
     width: min(440px, calc(100vw - 32px));
-    height: min(640px, calc(100vh - 120px));
+    height: min(660px, calc(100vh - 112px));
     min-width: 360px;
     min-height: 460px;
     max-width: calc(100vw - 32px);
@@ -126,8 +141,8 @@
 .controlsWrap {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 10px 12px;
+    gap: 6px;
+    padding: 8px 10px;
     border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -143,7 +158,8 @@
 }
 
 .actionsRow {
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: auto auto auto;
+    justify-content: end;
 }
 
 .input,
@@ -168,7 +184,8 @@
 
 .btn,
 .btnPrimary,
-.iconToggle {
+.iconToggle,
+.iconBtn {
     appearance: none;
     border-radius: var(--radius-sm);
     font-size: 12px;
@@ -199,6 +216,18 @@
     font-size: 16px;
 }
 
+.iconBtn {
+    width: 42px;
+    padding: 8px 0;
+    font-size: 16px;
+}
+
+.iconBtnActive {
+    color: var(--color-accent);
+    border-color: var(--color-accent-border);
+    background: var(--color-accent-bg);
+}
+
 .iconOn {
     color: var(--color-bull);
     border-color: var(--color-bull-border);
@@ -215,7 +244,7 @@
     display: grid;
     grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr) auto;
     gap: 8px;
-    padding: 0 12px 10px;
+    padding: 0 10px 8px;
     border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -223,9 +252,9 @@
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-    padding: 8px 12px 10px;
+    padding: 6px 10px 8px;
     border-bottom: 1px solid var(--border-subtle);
-    max-height: 86px;
+    max-height: 62px;
     overflow: auto;
 }
 
@@ -265,11 +294,11 @@
 }
 
 .messages {
-    padding: 12px;
+    padding: 10px;
     overflow: auto;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
     min-height: 160px;
     flex: 1;
 }
@@ -292,6 +321,26 @@
 
 .attachmentWrap {
     margin-top: 6px;
+}
+
+.attachmentPreviewBtn,
+.attachmentLinkButton {
+    border: none;
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    color: inherit;
+    text-align: left;
+}
+
+.attachmentLinkButton {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.attachmentFileIcon {
+    font-size: 12px;
 }
 
 .attachmentImage {
@@ -347,15 +396,6 @@
     display: none;
 }
 
-.fileName {
-    font-size: 11px;
-    color: var(--text-muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 120px;
-}
-
 .attachIcon {
     width: 17px;
     height: 17px;
@@ -375,6 +415,91 @@
     padding: 0 12px 8px;
 }
 
+.previewOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(5px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 240;
+    padding: 16px;
+}
+
+.previewModal {
+    width: min(760px, calc(100vw - 32px));
+    max-height: min(86vh, 860px);
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    display: flex;
+    flex-direction: column;
+}
+
+.previewHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.previewTitle {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: calc(100% - 52px);
+}
+
+.previewBody {
+    padding: 12px;
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 220px;
+}
+
+.previewImage {
+    max-width: 100%;
+    max-height: min(64vh, 760px);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+}
+
+.previewFileCard {
+    width: min(380px, 100%);
+    border: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    padding: 14px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.previewFileIcon {
+    font-size: 26px;
+}
+
+.previewFileMeta {
+    color: var(--text-secondary);
+    font-size: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.previewActions {
+    padding: 0 12px 12px;
+    display: flex;
+    justify-content: flex-end;
+}
+
 .hint {
     font-size: 11px;
     color: var(--color-bear);
@@ -383,6 +508,10 @@
 
 @media (max-width: 768px) {
     .chatFab {
+        bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .chatFabOpen {
         bottom: calc(88px + env(safe-area-inset-bottom, 0px));
     }
 
@@ -419,12 +548,8 @@
         grid-template-columns: 1fr 1fr;
     }
 
-    .recipientRow button {
-        grid-column: span 2;
-    }
-
     .actionsRow {
-        grid-template-columns: 1fr auto auto;
+        justify-content: end;
     }
 
     .newContactRow {
@@ -437,26 +562,14 @@
 
     .composer {
         grid-template-columns: auto 1fr auto;
-        grid-template-areas:
-            'file name name'
-            'input input send';
-    }
-
-    .composer > button:first-of-type {
-        grid-area: file;
-    }
-
-    .fileName {
-        grid-area: name;
-        display: block;
-        max-width: none;
     }
 
     .messageInput {
-        grid-area: input;
+        min-height: 38px;
     }
 
-    .composer > button:last-of-type {
-        grid-area: send;
+    .previewModal {
+        width: calc(100vw - 20px);
+        max-height: calc(100vh - 20px);
     }
 }

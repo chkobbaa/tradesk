@@ -73,9 +73,9 @@ export default function ChatWidget() {
     const [newContactName, setNewContactName] = useState('');
     const [newContactId, setNewContactId] = useState('');
     const [text, setText] = useState('');
-    const [selectedFileName, setSelectedFileName] = useState('');
     const [uploading, setUploading] = useState(false);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
+    const [previewAttachment, setPreviewAttachment] = useState<ChatMessage['attachment'] | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [cookiesAccepted, setCookiesAccepted] = useState(true);
     const [pushSupported, setPushSupported] = useState(false);
@@ -474,7 +474,6 @@ export default function ChatWidget() {
             setError(err instanceof Error ? err.message : 'Failed to upload file');
         } finally {
             setUploading(false);
-            setSelectedFileName('');
             if (fileInputRef.current) {
                 fileInputRef.current.value = '';
             }
@@ -529,12 +528,25 @@ export default function ChatWidget() {
                                 onChange={(e) => setToId(e.target.value)}
                                 maxLength={6}
                             />
-                            <button className={styles.btn} onClick={loadMessages} disabled={normalizedToId.length !== 6}>Refresh</button>
+                            <button
+                                className={styles.iconBtn}
+                                onClick={loadMessages}
+                                disabled={normalizedToId.length !== 6}
+                                aria-label="Refresh chat"
+                                title="Refresh chat"
+                            >
+                                ↻
+                            </button>
                         </div>
 
                         <div className={styles.actionsRow}>
-                            <button className={styles.btn} onClick={() => setShowNewContact(prev => !prev)}>
-                                {showNewContact ? 'Hide Contact Form' : 'New Contact'}
+                            <button
+                                className={`${styles.iconBtn} ${showNewContact ? styles.iconBtnActive : ''}`}
+                                onClick={() => setShowNewContact(prev => !prev)}
+                                aria-label={showNewContact ? 'Hide new contact form' : 'Add new contact'}
+                                title={showNewContact ? 'Hide new contact form' : 'Add new contact'}
+                            >
+                                ＋
                             </button>
                             <button
                                 className={`${styles.iconToggle} ${pushEnabled ? styles.iconOn : styles.iconOff}`}
@@ -544,7 +556,14 @@ export default function ChatWidget() {
                             >
                                 {pushEnabled ? '🔔' : '🔕'}
                             </button>
-                            <button className={styles.btn} onClick={() => setMessages([])}>Clear Chat</button>
+                            <button
+                                className={styles.iconBtn}
+                                onClick={() => setMessages([])}
+                                aria-label="Clear current chat"
+                                title="Clear current chat"
+                            >
+                                ⌫
+                            </button>
                         </div>
                     </div>
 
@@ -617,17 +636,28 @@ export default function ChatWidget() {
                                         {m.attachment && (
                                             <div className={styles.attachmentWrap}>
                                                 {m.attachment.mimeType.startsWith('image/') ? (
-                                                    <a href={m.attachment.fileUrl} target="_blank" rel="noreferrer">
+                                                    <button
+                                                        className={styles.attachmentPreviewBtn}
+                                                        onClick={() => setPreviewAttachment(m.attachment || null)}
+                                                        aria-label={`Open attachment ${m.attachment.fileName}`}
+                                                    >
                                                         <img
                                                             className={styles.attachmentImage}
                                                             src={m.attachment.fileUrl}
                                                             alt={m.attachment.fileName}
                                                         />
-                                                    </a>
+                                                    </button>
                                                 ) : (
-                                                    <a className={styles.attachmentLink} href={m.attachment.fileUrl} target="_blank" rel="noreferrer">
+                                                    <button
+                                                        className={styles.attachmentLinkButton}
+                                                        onClick={() => setPreviewAttachment(m.attachment || null)}
+                                                        aria-label={`Open attachment ${m.attachment.fileName}`}
+                                                    >
+                                                        <span className={styles.attachmentFileIcon}>📎</span>
+                                                        <span className={styles.attachmentLink}>
                                                         {m.attachment.fileName} · {formatBytes(m.attachment.fileSize)}
-                                                    </a>
+                                                        </span>
+                                                    </button>
                                                 )}
                                             </div>
                                         )}
@@ -649,7 +679,6 @@ export default function ChatWidget() {
                             onChange={(e) => {
                                 const file = e.target.files?.[0];
                                 if (file) {
-                                    setSelectedFileName(file.name);
                                     void uploadFile(file);
                                 }
                             }}
@@ -668,7 +697,6 @@ export default function ChatWidget() {
                                 </svg>
                             )}
                         </button>
-                        {selectedFileName && <span className={styles.fileName} title={selectedFileName}>{selectedFileName}</span>}
                         <textarea
                             className={styles.messageInput}
                             placeholder="Type message..."
@@ -691,14 +719,63 @@ export default function ChatWidget() {
                 </section>
             )}
 
+            {previewAttachment && (
+                <div className={styles.previewOverlay} onClick={() => setPreviewAttachment(null)} role="presentation">
+                    <div className={styles.previewModal} onClick={(e) => e.stopPropagation()}>
+                        <div className={styles.previewHeader}>
+                            <span className={styles.previewTitle} title={previewAttachment.fileName}>{previewAttachment.fileName}</span>
+                            <button
+                                className={styles.headerBtn}
+                                onClick={() => setPreviewAttachment(null)}
+                                aria-label="Close attachment preview"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <div className={styles.previewBody}>
+                            {previewAttachment.mimeType.startsWith('image/') ? (
+                                <img
+                                    className={styles.previewImage}
+                                    src={previewAttachment.fileUrl}
+                                    alt={previewAttachment.fileName}
+                                />
+                            ) : (
+                                <div className={styles.previewFileCard}>
+                                    <div className={styles.previewFileIcon}>📄</div>
+                                    <div className={styles.previewFileMeta}>
+                                        <div>{previewAttachment.fileName}</div>
+                                        <div>{formatBytes(previewAttachment.fileSize)}</div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className={styles.previewActions}>
+                            <a
+                                className={styles.btnPrimary}
+                                href={previewAttachment.fileUrl}
+                                download={previewAttachment.fileName}
+                            >
+                                Download
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <button
                 ref={fabRef}
-                className={styles.chatFab}
-                aria-label="Open chat"
+                className={`${styles.chatFab} ${open ? styles.chatFabOpen : ''}`}
+                aria-label={open ? 'Close chat' : 'Open chat'}
                 onClick={() => setOpen(prev => !prev)}
             >
-                {unreadCount > 0 && <span className={styles.unreadBadge}>{unreadCount > 99 ? '99+' : unreadCount}</span>}
-                💬
+                {!open && unreadCount > 0 && <span className={styles.unreadBadge}>{unreadCount > 99 ? '99+' : unreadCount}</span>}
+                {open ? (
+                    <span className={styles.fabCloseLabel}>✕ Close</span>
+                ) : (
+                    <span>💬</span>
+                )}
             </button>
         </>
     );
