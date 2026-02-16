@@ -7,6 +7,7 @@ const DEVICE_STORAGE_KEY = 'tradesk-chat-device-id';
 const COOKIE_CONSENT_KEY = 'tradesk-cookie-consent';
 const THREAD_CACHE_STORAGE_PREFIX = 'tradesk-chat-thread-cache-v1';
 const LAST_CHAT_CONTACT_PREFIX = 'tradesk-chat-last-contact-v1';
+const LAST_INCOMING_STORAGE_PREFIX = 'tradesk-chat-last-incoming-v1';
 const DEVICE_ID_PATTERN = /^[a-f0-9]{32}$/;
 const CHAT_ID_PATTERN = /^[a-z0-9]{6}$/;
 const MAX_CACHED_MESSAGES = 80;
@@ -302,7 +303,7 @@ export default function ChatWidget() {
         }
     }, [myId, normalizedToId]);
 
-    const loadMessages = useCallback(async (contactIdOverride?: string) => {
+    const loadMessages = useCallback(async (contactIdOverride?: string, options?: { silent?: boolean }) => {
         const targetId = (contactIdOverride ?? normalizedToId).trim().toLowerCase();
         if (targetId.length !== 6) return;
 
@@ -340,7 +341,9 @@ export default function ChatWidget() {
 
             setError(null);
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load messages');
+            if (!options?.silent) {
+                setError(err instanceof Error ? err.message : 'Failed to load messages');
+            }
         }
     }, [fetchWithIdentity, myId, normalizedToId, updateThreadCache]);
 
@@ -354,9 +357,19 @@ export default function ChatWidget() {
             }
 
             prefetchedContactsRef.current.add(contact.contactId);
-            void loadMessages(contact.contactId);
+            void loadMessages(contact.contactId, { silent: true });
         }
     }, [contacts, loadMessages]);
+
+    useEffect(() => {
+        if (!myId || typeof window === 'undefined') return;
+
+        const savedLastIncoming = Number(localStorage.getItem(`${LAST_INCOMING_STORAGE_PREFIX}:${myId}`) || '0');
+        if (Number.isFinite(savedLastIncoming) && savedLastIncoming > 0) {
+            lastIncomingIdRef.current = savedLastIncoming;
+            incomingPollInitializedRef.current = true;
+        }
+    }, [myId]);
 
     useEffect(() => {
         if (normalizedToId.length !== 6) {
@@ -420,13 +433,21 @@ export default function ChatWidget() {
                     lastIncomingIdRef.current = maxSeenId;
                     incomingPollInitializedRef.current = true;
 
+                    if (typeof window !== 'undefined' && myId) {
+                        localStorage.setItem(`${LAST_INCOMING_STORAGE_PREFIX}:${myId}`, String(lastIncomingIdRef.current));
+                    }
+
                     if (normalizedToId.length === 6 && incoming.some(message => message.fromId === normalizedToId)) {
-                        void loadMessages(normalizedToId);
+                        void loadMessages(normalizedToId, { silent: true });
                     }
                     return;
                 }
 
                 lastIncomingIdRef.current = maxSeenId;
+
+                if (typeof window !== 'undefined' && myId) {
+                    localStorage.setItem(`${LAST_INCOMING_STORAGE_PREFIX}:${myId}`, String(lastIncomingIdRef.current));
+                }
 
                 let unreadDelta = 0;
                 let shouldRefreshActiveConversation = false;
@@ -464,12 +485,12 @@ export default function ChatWidget() {
                 }
 
                 if (shouldRefreshActiveConversation && normalizedToId.length === 6) {
-                    void loadMessages(normalizedToId);
+                    void loadMessages(normalizedToId, { silent: true });
                 }
 
                 setError(null);
-            } catch (err) {
-                setError(err instanceof Error ? err.message : 'Failed to poll incoming messages');
+            } catch {
+                // Avoid surfacing background polling noise in the chat error banner.
             }
         };
 
@@ -481,6 +502,12 @@ export default function ChatWidget() {
             clearInterval(timer);
         };
     }, [contacts, fetchWithIdentity, loadMessages, myId, normalizedToId, open, pushEnabled]);
+
+    useEffect(() => {
+        if (open) {
+            setUnreadCount(0);
+        }
+    }, [open]);
 
     useEffect(() => {
         if (!listRef.current) return;
