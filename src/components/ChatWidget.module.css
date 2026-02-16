@@ -15,15 +15,15 @@
 }
 
 .chatFabOpen {
-    width: 86px;
+    width: 92px;
     height: 34px;
     border-radius: 10px;
     background: var(--color-bear-bg);
     border-color: var(--color-bear-border);
     color: var(--color-bear);
     font-size: 12px;
-    bottom: auto;
-    top: 14px;
+    bottom: 16px;
+    top: auto;
 }
 
 .fabCloseLabel {
@@ -129,14 +129,16 @@
 .headerActions {
     display: flex;
     gap: 6px;
+    flex-shrink: 0;
 }
 
 .headerBtn {
     border: 1px solid var(--border-color);
     background: var(--bg-secondary);
     color: var(--text-secondary);
-    font-size: 14px;
-    padding: 4px 8px;
+    width: 42px;
+    height: 36px;
+    padding: 0;
     border-radius: var(--radius-sm);
 }
 
@@ -160,8 +162,10 @@
 }
 
 .actionsRow {
-    grid-template-columns: auto auto auto;
-    justify-content: start;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-start;
 }
 
 .input,
@@ -214,14 +218,20 @@
 
 .iconToggle {
     width: 42px;
-    padding: 8px 0;
-    font-size: 16px;
+    height: 42px;
+    padding: 0;
 }
 
 .iconBtn {
     width: 42px;
-    padding: 8px 0;
-    font-size: 16px;
+    height: 42px;
+    padding: 0;
+}
+
+.iconSvg {
+    width: 18px;
+    height: 18px;
+    display: block;
 }
 
 .iconBtnActive {
@@ -533,9 +543,9 @@
     }
 
     .chatFabOpen {
-        top: calc(max(10px, env(safe-area-inset-top, 0px)) + 8px);
-        right: 20px;
-        bottom: auto;
+        bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+        right: 16px;
+        top: auto;
     }
 
     .chatPanel {
@@ -572,7 +582,7 @@
     }
 
     .actionsRow {
-        justify-content: end;
+        justify-content: flex-start;
     }
 
     .newContactRow {

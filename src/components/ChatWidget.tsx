@@ -502,7 +502,15 @@ export default function ChatWidget() {
                         </div>
                         <div className={styles.headerActions}>
                             <button className={styles.headerBtn} onClick={() => setFullscreen(prev => !prev)} aria-label="Toggle fullscreen">
-                                {fullscreen ? '🗗' : '🗖'}
+                                {fullscreen ? (
+                                    <svg className={styles.iconSvg} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                        <path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                ) : (
+                                    <svg className={styles.iconSvg} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                        <path d="M9 3H3v6M15 3h6v6M9 21H3v-6M21 15v6h-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                )}
                             </button>
                             <button className={styles.headerBtn} onClick={() => setOpen(false)} aria-label="Close chat">✕</button>
                         </div>
@@ -529,6 +537,9 @@ export default function ChatWidget() {
                                 onChange={(e) => setToId(e.target.value)}
                                 maxLength={6}
                             />
+                        </div>
+
+                        <div className={styles.actionsRow}>
                             <button
                                 className={styles.iconBtn}
                                 onClick={loadMessages}
@@ -536,18 +547,19 @@ export default function ChatWidget() {
                                 aria-label="Refresh chat"
                                 title="Refresh chat"
                             >
-                                ↻
+                                <svg className={styles.iconSvg} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                    <path d="M20 11a8 8 0 10.93 4M20 4v7h-7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
                             </button>
-                        </div>
-
-                        <div className={styles.actionsRow}>
                             <button
                                 className={`${styles.iconBtn} ${showNewContact ? styles.iconBtnActive : ''}`}
                                 onClick={() => setShowNewContact(prev => !prev)}
                                 aria-label={showNewContact ? 'Hide new contact form' : 'Add new contact'}
                                 title={showNewContact ? 'Hide new contact form' : 'Add new contact'}
                             >
-                                ＋
+                                <svg className={styles.iconSvg} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                    <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
                             </button>
                             <button
                                 className={`${styles.iconToggle} ${pushEnabled ? styles.iconOn : styles.iconOff}`}
@@ -555,7 +567,18 @@ export default function ChatWidget() {
                                 aria-label={pushEnabled ? 'Notifications enabled' : 'Notifications muted'}
                                 title={pushEnabled ? 'Notifications enabled' : 'Notifications muted'}
                             >
-                                {pushEnabled ? '🔔' : '🔕'}
+                                {pushEnabled ? (
+                                    <svg className={styles.iconSvg} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                        <path d="M15 17H5.5a1.5 1.5 0 01-1.2-2.4l1.2-1.6V10a5.5 5.5 0 0111 0v3l1.2 1.6A1.5 1.5 0 0116.5 17H15z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                                        <path d="M10.5 20a2 2 0 004 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                                    </svg>
+                                ) : (
+                                    <svg className={styles.iconSvg} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                        <path d="M15 17H5.5a1.5 1.5 0 01-1.2-2.4l1.2-1.6V10a5.5 5.5 0 018.2-4.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                                        <path d="M18.5 10v3l1.2 1.6A1.5 1.5 0 0119 17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                                        <path d="M3 3l18 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                                    </svg>
+                                )}
                             </button>
                             <button
                                 className={styles.iconBtn}
@@ -563,7 +586,10 @@ export default function ChatWidget() {
                                 aria-label="Clear current chat"
                                 title="Clear current chat"
                             >
-                                ⌫
+                                <svg className={styles.iconSvg} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                    <path d="M20 6L9 17l-5-5 11-11h5v5z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                                    <path d="M14 8l4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                                </svg>
                             </button>
                         </div>
                     </div>
