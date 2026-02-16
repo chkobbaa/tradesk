@@ -789,11 +789,21 @@ export default function ChatWidget() {
                 // Use AudioContext + ScriptProcessorNode to capture raw PCM.
                 // Encode as WAV on stop. 100% reliable on iOS Safari & PWA.
                 const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-                const audioContext = new AudioCtx({ sampleRate: 16000 });
+                // Do NOT specify sampleRate — iOS rejects non-native rates silently.
+                // We'll use whatever the device gives us (usually 48000 or 44100).
+                const audioContext = new AudioCtx();
+
+                // iOS starts AudioContext in "suspended" state — must explicitly resume.
+                if (audioContext.state === 'suspended') {
+                    await audioContext.resume();
+                }
+
                 const source = audioContext.createMediaStreamSource(stream);
                 const processor = audioContext.createScriptProcessor(4096, 1, 1);
                 const gain = audioContext.createGain();
-                gain.gain.value = 0; // mute playback so mic doesn't echo to speakers
+                // Use a near-zero gain instead of 0 — iOS detects true silence
+                // and kills the audio session (mic indicator disappears after ~2s).
+                gain.gain.value = 0.00001;
 
                 const pcmChunks: Float32Array[] = [];
                 processor.onaudioprocess = (e) => {
@@ -804,6 +814,13 @@ export default function ChatWidget() {
                 source.connect(processor);
                 processor.connect(gain);
                 gain.connect(audioContext.destination);
+
+                // Re-resume if iOS suspends the context mid-recording
+                audioContext.addEventListener('statechange', () => {
+                    if (audioContext.state === 'suspended' && wavRecorderRef.current) {
+                        void audioContext.resume();
+                    }
+                });
 
                 wavRecorderRef.current = { audioContext, source, processor, gain, chunks: pcmChunks };
             } else {
