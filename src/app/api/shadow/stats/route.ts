@@ -5,21 +5,35 @@ import { RegimeLabeler } from '@/core/signals/RegimeLabeler';
 
 export async function GET() {
     try {
-        const [stats, equity, trades, portfolio, decisions, candles] = await Promise.all([
+        const [stats, equity, trades, portfolio, decisions] = await Promise.all([
             getShadowTradeStats(),
             getShadowEquityCurve(),
             getShadowTrades(),
             loadShadowPortfolioState(),
             getShadowDecisions(30),
-            fetchBinanceCandles('BTCUSDT', '1h', 100).catch(() => []),
         ]);
 
-        // Compute current regime from latest candles
-        const regime = candles.length >= 30
-            ? RegimeLabeler.label(candles)
-            : { label: 'UNCLEAR', reason: 'No candle data', confidence: 0 };
+        const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
+        const candlesMap = await Promise.all(
+            symbols.map(sym => fetchBinanceCandles(sym, '1h', 2).then(c => ({ symbol: sym, candle: c[c.length - 1] })).catch(() => null))
+        );
 
-        const currentPrice = candles.length > 0 ? candles[candles.length - 1].close : 0;
+        const prices: Record<string, number> = {};
+        candlesMap.forEach(item => {
+            if (item && item.candle) {
+                prices[item.symbol] = item.candle.close;
+            }
+        });
+
+        // For backward compatibility, keep currentPrice as BTC price
+        const currentPrice = prices['BTCUSDT'] || 0;
+
+        // Compute regime using BTC candles (default)
+        // We could expand this to be per-symbol in future
+        const btcCandles = await fetchBinanceCandles('BTCUSDT', '1h', 100).catch(() => []);
+        const regime = btcCandles.length >= 30
+            ? RegimeLabeler.label(btcCandles)
+            : { label: 'UNCLEAR', reason: 'No candle data', confidence: 0 };
 
         return NextResponse.json({
             stats,
@@ -29,6 +43,7 @@ export async function GET() {
             decisions,
             regime,
             currentPrice,
+            prices,
         });
     } catch (err) {
         return NextResponse.json(

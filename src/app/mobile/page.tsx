@@ -44,6 +44,7 @@ interface ShadowData {
     decisions: Decision[];
     regime?: RegimeData;
     currentPrice?: number;
+    prices?: Record<string, number>;
 }
 
 function timeAgo(ts: number): string {
@@ -119,6 +120,8 @@ export default function MobilePage() {
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
+    const [isAdvancedMode, setIsAdvancedMode] = useState(false);
+
     useEffect(() => {
         if ('serviceWorker' in navigator && 'PushManager' in window) {
             navigator.serviceWorker.register('/sw.js').then(reg => {
@@ -128,6 +131,10 @@ export default function MobilePage() {
             });
         }
     }, []);
+    // ... existing togglePush code ...
+
+    // ... inside component render ...
+
 
     async function togglePush() {
         if (!('serviceWorker' in navigator)) return;
@@ -220,11 +227,20 @@ export default function MobilePage() {
     const decisions = data?.decisions || [];
     const regime = data?.regime;
     const positions = portfolio?.positions || [];
-    const currentPrice = data?.currentPrice || 0;
-    // If we have positions, we might want to default to showing them, but let's stick to list view
+    const prices = data?.prices || {};
+    const btcPrice = data?.currentPrice || 0;
+
     const startBalance = 10000;
     const balance = portfolio?.balance ?? startBalance;
-    const totalPnL = balance - startBalance;
+
+    // Calculate Unrealized PnL
+    const unrealizedPnL = positions.reduce((sum, pos) => {
+        const price = prices[pos.symbol] || (pos.symbol === 'BTCUSDT' ? btcPrice : pos.entryPrice);
+        const pnl = (price - pos.entryPrice) * pos.quantity * (pos.side === 'LONG' ? 1 : -1);
+        return sum + pnl;
+    }, 0);
+
+    const totalPnL = (balance + unrealizedPnL) - startBalance;
     const pnlPct = (totalPnL / startBalance) * 100;
 
     return (
@@ -297,24 +313,42 @@ export default function MobilePage() {
                         <div className={styles.statusCard}>
                             <div className={styles.statusHeader}>
                                 <span className={styles.botLabel}>Shadow Bot</span>
-                                <span className={`${styles.badge} ${positions.length > 0 ? styles.badgeActive : styles.badgeIdle}`}>
-                                    {positions.length > 0 ? `● ${positions.length} ACTIVE` : '○ IDLE'}
-                                </span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <label className={styles.modeToggle}>
+                                        <span onClick={() => setIsAdvancedMode(false)} className={!isAdvancedMode ? styles.activeMode : ''}>Simple</span>
+                                        <span onClick={() => setIsAdvancedMode(true)} className={isAdvancedMode ? styles.activeMode : ''}>Adv</span>
+                                    </label>
+                                    <span className={`${styles.badge} ${positions.length > 0 ? styles.badgeActive : styles.badgeIdle}`}>
+                                        {positions.length > 0 ? `● ${positions.length}` : '○'}
+                                    </span>
+                                </div>
                             </div>
 
                             <div className={styles.balanceSection}>
-                                <div className={styles.balanceLabel}>Balance</div>
+                                <div className={styles.balanceLabel}>Net Worth (Equity)</div>
                                 <div className={styles.balanceValue}>
-                                    ${balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    ${(balance + unrealizedPnL).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </div>
                                 <div className={styles.pnlRow}>
-                                    <span className={`${styles.pnlValue} ${totalPnL >= 0 ? styles.green : styles.red}`}>
-                                        {totalPnL >= 0 ? '+' : ''}{totalPnL.toFixed(2)}
-                                    </span>
-                                    <span className={`${styles.pnlPct} ${totalPnL >= 0 ? styles.green : styles.red}`}>
-                                        ({pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%)
+                                    <span className={styles.pnlLabel}>Unrealized PnL:</span>
+                                    <span className={`${styles.pnlValue} ${unrealizedPnL >= 0 ? styles.green : styles.red}`}>
+                                        {unrealizedPnL >= 0 ? '+' : ''}${Math.abs(unrealizedPnL).toFixed(2)}
                                     </span>
                                 </div>
+                                {isAdvancedMode && (
+                                    <div className={styles.advancedStats}>
+                                        <div className={styles.statRow}>
+                                            <span>Cash Balance:</span>
+                                            <span>${balance.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                                        </div>
+                                        <div className={styles.statRow}>
+                                            <span>Total Return:</span>
+                                            <span className={(balance + unrealizedPnL - startBalance) >= 0 ? styles.green : styles.red}>
+                                                {((balance + unrealizedPnL - startBalance) / startBalance * 100).toFixed(2)}%
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -371,65 +405,68 @@ export default function MobilePage() {
                                 <div className={styles.emptyPosition}>No active positions</div>
                             ) : (
                                 <ul className={styles.positionList}>
-                                    {positions.map(pos => (
-                                        <li
-                                            key={pos.id}
-                                            className={`${styles.positionCard} ${isSelectionMode ? styles.selectionMode : ''} ${selectedIds.has(pos.id) ? styles.selected : ''}`}
-                                            onClick={() => isSelectionMode && toggleSelection(pos.id)}
-                                        >
-                                            {isSelectionMode && (
-                                                <div className={`${styles.paramCheckbox} ${selectedIds.has(pos.id) ? styles.checked : ''}`}>
-                                                    {selectedIds.has(pos.id) && '✓'}
-                                                </div>
-                                            )}
-                                            <div className={styles.positionBody}>
-                                                <div className={styles.posRow}>
-                                                    <span className={`${styles.posSide} ${pos.side === 'LONG' ? styles.posLong : styles.posShort}`}>
-                                                        {pos.side}
-                                                    </span>
-                                                    <span className={styles.posSymbol}>{pos.symbol}</span>
-                                                </div>
-                                                <div className={styles.posDetails}>
-                                                    <div className={styles.posDetail}>
-                                                        <span className={styles.posDetailLabel}>Entry</span>
-                                                        <span>${pos.entryPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                                    {positions.map(pos => {
+                                        const currentPrice = prices[pos.symbol] || (pos.symbol === 'BTCUSDT' ? btcPrice : 0);
+                                        return (
+                                            <li
+                                                key={pos.id}
+                                                className={`${styles.positionCard} ${isSelectionMode ? styles.selectionMode : ''} ${selectedIds.has(pos.id) ? styles.selected : ''}`}
+                                                onClick={() => isSelectionMode && toggleSelection(pos.id)}
+                                            >
+                                                {isSelectionMode && (
+                                                    <div className={`${styles.paramCheckbox} ${selectedIds.has(pos.id) ? styles.checked : ''}`}>
+                                                        {selectedIds.has(pos.id) && '✓'}
                                                     </div>
-                                                    <div className={styles.posDetail}>
-                                                        <span className={styles.posDetailLabel}>Qty</span>
-                                                        <span>{pos.quantity.toFixed(6)}</span>
+                                                )}
+                                                <div className={styles.positionBody}>
+                                                    <div className={styles.posRow}>
+                                                        <span className={`${styles.posSide} ${pos.side === 'LONG' ? styles.posLong : styles.posShort}`}>
+                                                            {pos.side}
+                                                        </span>
+                                                        <span className={styles.posSymbol}>{pos.symbol}</span>
                                                     </div>
-                                                    {pos.stopLoss && (
+                                                    <div className={styles.posDetails}>
                                                         <div className={styles.posDetail}>
-                                                            <span className={styles.posDetailLabel}>SL</span>
-                                                            <span className={styles.red}>${pos.stopLoss.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                                                            <span className={styles.posDetailLabel}>Entry</span>
+                                                            <span>${pos.entryPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                                                         </div>
-                                                    )}
-                                                    {pos.takeProfit && (
                                                         <div className={styles.posDetail}>
-                                                            <span className={styles.posDetailLabel}>TP</span>
-                                                            <span className={styles.green}>${pos.takeProfit.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                                                            <span className={styles.posDetailLabel}>Qty</span>
+                                                            <span>{pos.quantity.toFixed(6)}</span>
                                                         </div>
-                                                    )}
-                                                    <div className={styles.posDetail}>
-                                                        <span className={styles.posDetailLabel}>Held</span>
-                                                        <span>{timeAgo(pos.openTime)}</span>
+                                                        {pos.stopLoss && (
+                                                            <div className={styles.posDetail}>
+                                                                <span className={styles.posDetailLabel}>SL</span>
+                                                                <span className={styles.red}>${pos.stopLoss.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                                                            </div>
+                                                        )}
+                                                        {pos.takeProfit && (
+                                                            <div className={styles.posDetail}>
+                                                                <span className={styles.posDetailLabel}>TP</span>
+                                                                <span className={styles.green}>${pos.takeProfit.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                                                            </div>
+                                                        )}
+                                                        <div className={styles.posDetail}>
+                                                            <span className={styles.posDetailLabel}>Held</span>
+                                                            <span>{timeAgo(pos.openTime)}</span>
+                                                        </div>
+                                                        {currentPrice > 0 && (
+                                                            <div className={styles.posDetail} style={{ width: '100%', marginTop: 4, display: 'flex', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 4 }}>
+                                                                <span className={styles.posDetailLabel}>Live P&L</span>
+                                                                <span className={((currentPrice - pos.entryPrice) * (pos.side === 'LONG' ? 1 : -1)) >= 0 ? styles.green : styles.red}>
+                                                                    {((currentPrice - pos.entryPrice) * pos.quantity * (pos.side === 'LONG' ? 1 : -1) >= 0 ? '+' : '')}
+                                                                    ${((currentPrice - pos.entryPrice) * pos.quantity * (pos.side === 'LONG' ? 1 : -1)).toFixed(2)}
+                                                                    {' ('}
+                                                                    {((currentPrice - pos.entryPrice) / pos.entryPrice * 100 * (pos.side === 'LONG' ? 1 : -1) >= 0 ? '+' : '')}
+                                                                    {((currentPrice - pos.entryPrice) / pos.entryPrice * 100 * (pos.side === 'LONG' ? 1 : -1)).toFixed(2)}%)
+                                                                </span>
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                    {currentPrice > 0 && (
-                                                        <div className={styles.posDetail} style={{ width: '100%', marginTop: 4, display: 'flex', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 4 }}>
-                                                            <span className={styles.posDetailLabel}>Live P&L</span>
-                                                            <span className={((currentPrice - pos.entryPrice) * (pos.side === 'LONG' ? 1 : -1)) >= 0 ? styles.green : styles.red}>
-                                                                {((currentPrice - pos.entryPrice) * pos.quantity * (pos.side === 'LONG' ? 1 : -1) >= 0 ? '+' : '')}
-                                                                ${((currentPrice - pos.entryPrice) * pos.quantity * (pos.side === 'LONG' ? 1 : -1)).toFixed(2)}
-                                                                {' ('}
-                                                                {((currentPrice - pos.entryPrice) / pos.entryPrice * 100 * (pos.side === 'LONG' ? 1 : -1) >= 0 ? '+' : '')}
-                                                                {((currentPrice - pos.entryPrice) / pos.entryPrice * 100 * (pos.side === 'LONG' ? 1 : -1)).toFixed(2)}%)
-                                                            </span>
-                                                        </div>
-                                                    )}
                                                 </div>
-                                            </div>
-                                        </li>
-                                    ))}
+                                            </li>
+                                        );
+                                    })}
                                 </ul>
                             )}
                         </div>

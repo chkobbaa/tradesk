@@ -26,6 +26,7 @@ import { useSignals } from '@/hooks/useSignals';
 import { useShadowTrader } from '@/hooks/useShadowTrader';
 import { SignalPanel } from '@/components/SignalPanel';
 import { ShadowStatus } from '@/components/ShadowStatus';
+import { BotRunner } from '@/components/BotRunner';
 import styles from './page.module.css';
 
 // ─── localStorage Persistence ──────────────────────────────────
@@ -125,8 +126,34 @@ export default function ChartsPage() {
     // ─── Phase 7: Signals ──────────────────────────────────────
     const { results: signals, decision, macroSentiment, setMacroSentiment } = useSignals(candles);
 
-    // ─── Phase 9: Shadow Mode ──────────────────────────────────
-    const { shadowPortfolio } = useShadowTrader(decision, currentPrice, symbol, lastClosedCandle);
+    // ─── Phase 9: Multi-Asset Bot Runners ──────────────────────
+    // specific symbols we want the bot to trade
+    const activeSymbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
+
+    // We still need one "main" shadow portfolio for the UI status component
+    // We can just fetch it from API or let the individual runners handle updates
+    // For now, let's keep the hook ONLY for the CURRENT symbol to show status
+    // But the actual trading logic for ALL symbols happens in the runners below.
+    // We use the global 'portfolio' state for the UI, which is updated by the BotRunners.
+    // The BotRunners encapsulate the trading logic for each active symbol.
+    // We don't need to call useShadowTrader here directly anymore.
+
+    // Let's rely on the API synchronization. 
+    // We will render BotRunners for all symbols.
+    // AND we will use a "readonly" version of useShadowTrader or just fetch portfolio for UI.
+    // For simplicity in this step: We will use BotRunners for ALL modifications.
+    // And we will use a simplified hook just to READ portfolio for the UI.
+    // Wait, useShadowTrader does both.
+    // Let's modify ChartsPage to ONLY use BotRunners for logic.
+    // And use a new useShadowPortfolio hook for UI.
+    // For now, I will comment out the old single-asset logic to prevent conflicts
+    // and let BotRunners handle everything.
+    // But we need 'shadowPortfolio' variable for the JSX below.
+    // Let's mock it or fetch it.
+    // Actually, let's keep the hook but DISABLE its trading logic if it's handled by runner?
+    // No, cleaner to just have BotRunners.
+    // I will add a simple useEffect to fetch portfolio for UI display.
+
     // ───────────────────────────────────────────────────────────
 
     // Fetch symbols
@@ -352,7 +379,7 @@ export default function ChartsPage() {
                     </div>
                     {!isFullscreen && (
                         <div className={styles.tradingCol}>
-                            <ShadowStatus portfolio={shadowPortfolio} />
+                            <ShadowStatus portfolio={portfolio} />
                             <TradingPanel
                                 portfolio={portfolio}
                                 currentPrice={currentPrice}
@@ -376,6 +403,17 @@ export default function ChartsPage() {
                     <TradeHistory trades={portfolio.trades} />
                 </div>
             )}
+
+            {/* ─── Multi-Asset Bot Runners ─── */}
+            {activeSymbols.map(sym => (
+                <BotRunner
+                    key={sym}
+                    symbol={sym}
+                    isActive={true}
+                    portfolio={portfolio}
+                    onUpdatePortfolio={setPortfolio}
+                />
+            ))}
         </div>
     );
 }
