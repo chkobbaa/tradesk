@@ -3,6 +3,27 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styles from './ChatWidget.module.css';
 
+const DEVICE_STORAGE_KEY = 'tradesk-chat-device-id';
+const COOKIE_CONSENT_KEY = 'tradesk-cookie-consent';
+const DEVICE_ID_PATTERN = /^[a-f0-9]{32}$/;
+
+function createDeviceId(): string {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function getOrCreateDeviceId(): string {
+    const existing = localStorage.getItem(DEVICE_STORAGE_KEY)?.trim().toLowerCase();
+    if (existing && DEVICE_ID_PATTERN.test(existing)) {
+        return existing;
+    }
+
+    const generated = createDeviceId();
+    localStorage.setItem(DEVICE_STORAGE_KEY, generated);
+    return generated;
+}
+
 interface ChatMessage {
     id: number;
     fromId: string;
@@ -14,26 +35,58 @@ interface ChatMessage {
 export default function ChatWidget() {
     const [open, setOpen] = useState(false);
     const [myId, setMyId] = useState('');
+    const [deviceId, setDeviceId] = useState('');
     const [toId, setToId] = useState('');
     const [text, setText] = useState('');
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [error, setError] = useState<string | null>(null);
+    const [cookiesAccepted, setCookiesAccepted] = useState(true);
     const [pushSupported, setPushSupported] = useState(false);
     const [pushEnabled, setPushEnabled] = useState(false);
+    const [fullscreen, setFullscreen] = useState(false);
     const listRef = useRef<HTMLDivElement>(null);
 
+    const fetchWithIdentity = useCallback((url: string, init?: RequestInit) => {
+        const headers = new Headers(init?.headers);
+        if (deviceId) {
+            headers.set('x-chat-device-id', deviceId);
+        }
+        return fetch(url, { ...init, headers });
+    }, [deviceId]);
+
+    const loadIdentity = useCallback(async () => {
+        try {
+            const res = await fetchWithIdentity('/api/chat/id');
+            const data = await res.json();
+            if (res.ok && typeof data?.id === 'string') {
+                setMyId(data.id);
+                setError(null);
+                return;
+            }
+            throw new Error(data?.error || 'Failed to load your chat ID');
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to load your chat ID');
+        }
+    }, [fetchWithIdentity]);
+
     useEffect(() => {
-        fetch('/api/chat/id')
-            .then(r => r.json())
-            .then(data => {
-                if (typeof data?.id === 'string') {
-                    setMyId(data.id);
-                }
-            })
-            .catch(() => {
-                setError('Failed to load your chat ID');
-            });
+        if (typeof window === 'undefined') return;
+
+        const consent = localStorage.getItem(COOKIE_CONSENT_KEY) === 'accepted';
+        setCookiesAccepted(consent);
+
+        try {
+            const localDeviceId = getOrCreateDeviceId();
+            setDeviceId(localDeviceId);
+        } catch {
+            setError('Local storage is unavailable; chat ID may not persist');
+        }
     }, []);
+
+    useEffect(() => {
+        if (!deviceId) return;
+        loadIdentity();
+    }, [deviceId, loadIdentity]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -49,7 +102,7 @@ export default function ChatWidget() {
         if (normalizedToId.length !== 6) return;
 
         try {
-            const res = await fetch(`/api/chat/messages?with=${normalizedToId}`);
+            const res = await fetchWithIdentity(`/api/chat/messages?with=${normalizedToId}`);
             const data = await res.json();
             if (!res.ok) {
                 throw new Error(data?.error || 'Failed to load messages');
@@ -90,7 +143,7 @@ export default function ChatWidget() {
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load messages');
         }
-    }, [myId, normalizedToId, open, pushEnabled]);
+    }, [fetchWithIdentity, myId, normalizedToId, open, pushEnabled]);
 
     useEffect(() => {
         if (!open || normalizedToId.length !== 6) return;
@@ -120,7 +173,7 @@ export default function ChatWidget() {
         if (normalizedToId.length !== 6 || text.trim().length === 0) return;
 
         try {
-            const res = await fetch('/api/chat/messages', {
+            const res = await fetchWithIdentity('/api/chat/messages', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -169,16 +222,30 @@ export default function ChatWidget() {
         setError('Push notification permission was denied');
     };
 
+    const acceptCookies = async () => {
+        if (typeof window === 'undefined') return;
+        localStorage.setItem(COOKIE_CONSENT_KEY, 'accepted');
+        setCookiesAccepted(true);
+        await loadIdentity();
+    };
+
+    const panelClassName = `${styles.chatPanel} ${fullscreen ? styles.fullscreen : ''}`;
+
     return (
         <>
             {open && (
-                <section className={styles.chatPanel} aria-label="Chat panel">
+                <section className={panelClassName} aria-label="Chat panel">
                     <div className={styles.header}>
                         <div>
                             <div className={styles.title}>Direct Chat</div>
                             <div className={styles.myId}>Your ID: {myId || '...'}</div>
                         </div>
-                        <button className={styles.closeBtn} onClick={() => setOpen(false)} aria-label="Close chat">✕</button>
+                        <div className={styles.headerActions}>
+                            <button className={styles.headerBtn} onClick={() => setFullscreen(prev => !prev)} aria-label="Toggle fullscreen">
+                                {fullscreen ? '🗗' : '🗖'}
+                            </button>
+                            <button className={styles.headerBtn} onClick={() => setOpen(false)} aria-label="Close chat">✕</button>
+                        </div>
                     </div>
 
                     <div className={styles.controls}>
@@ -189,12 +256,19 @@ export default function ChatWidget() {
                             onChange={(e) => setToId(e.target.value)}
                             maxLength={6}
                         />
-                        <button onClick={loadMessages} disabled={normalizedToId.length !== 6}>Refresh</button>
-                        <button onClick={togglePush}>
+                        <button className={styles.btn} onClick={loadMessages} disabled={normalizedToId.length !== 6}>Refresh</button>
+                        <button className={styles.btn} onClick={togglePush}>
                             {pushSupported ? (pushEnabled ? 'Push On' : 'Push Off') : 'Push N/A'}
                         </button>
-                        <button onClick={() => setMessages([])}>Clear</button>
+                        <button className={styles.btn} onClick={() => setMessages([])}>Clear</button>
                     </div>
+
+                    {!cookiesAccepted && (
+                        <div className={styles.cookieBanner}>
+                            <span>Accept cookies to keep your chat ID stable across refreshes.</span>
+                            <button className={styles.btnPrimary} onClick={acceptCookies}>Accept Cookies</button>
+                        </div>
+                    )}
 
                     <div className={styles.messages} ref={listRef}>
                         {normalizedToId.length !== 6 ? (
@@ -227,7 +301,7 @@ export default function ChatWidget() {
                             onChange={(e) => setText(e.target.value)}
                             maxLength={500}
                         />
-                        <button onClick={sendMessage}>Send</button>
+                        <button className={styles.btnPrimary} onClick={sendMessage}>Send</button>
                     </div>
                     {error && <div className={styles.hint}>{error}</div>}
                 </section>

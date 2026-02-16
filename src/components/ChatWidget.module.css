@@ -16,8 +16,12 @@
     position: fixed;
     right: 16px;
     bottom: 72px;
-    width: min(360px, calc(100vw - 32px));
-    max-height: min(70vh, 560px);
+    width: min(380px, calc(100vw - 32px));
+    height: min(520px, calc(100vh - 120px));
+    min-width: 320px;
+    min-height: 360px;
+    max-width: calc(100vw - 32px);
+    max-height: calc(100vh - 100px);
     display: flex;
     flex-direction: column;
     border: 1px solid var(--border-color);
@@ -25,15 +29,29 @@
     overflow: hidden;
     background: var(--bg-secondary);
     box-shadow: var(--shadow-lg);
+    resize: both;
     z-index: 130;
+}
+
+.fullscreen {
+    inset: 16px;
+    width: auto;
+    height: auto;
+    max-width: none;
+    max-height: none;
+    min-width: 0;
+    min-height: 0;
+    resize: none;
+    border-radius: var(--radius-sm);
 }
 
 .header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 10px 12px;
+    padding: 12px;
     border-bottom: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
 }
 
 .title {
@@ -55,12 +73,38 @@
     padding: 2px 6px;
 }
 
+.headerActions {
+    display: flex;
+    gap: 6px;
+}
+
+.headerBtn {
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-size: 13px;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+}
+
 .controls {
     display: grid;
     grid-template-columns: 1fr auto auto auto;
     gap: 8px;
     padding: 10px 12px;
     border-bottom: 1px solid var(--border-subtle);
+}
+
+.cookieBanner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-subtle);
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
 }
 
 .messages {
@@ -119,9 +163,32 @@
     width: 100%;
 }
 
+.btn,
+.btnPrimary {
+    appearance: none;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    padding: 7px 10px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+
+.btnPrimary {
+    border-color: var(--color-accent-border);
+    background: var(--color-accent-bg);
+    color: var(--color-accent);
+}
+
+.btn:disabled,
+.btnPrimary:disabled {
+    opacity: 0.55;
+}
+
 .textarea {
     min-height: 56px;
-    max-height: 120px;
+    max-height: 180px;
     resize: vertical;
     appearance: none;
     background: var(--bg-tertiary);
@@ -147,5 +214,13 @@
 
     .chatPanel {
         bottom: calc(146px + env(safe-area-inset-bottom, 0px));
+        left: 16px;
+        width: auto;
+        min-width: 0;
+        resize: none;
+    }
+
+    .fullscreen {
+        inset: 10px 10px calc(96px + env(safe-area-inset-bottom, 0px)) 10px;
     }
 }

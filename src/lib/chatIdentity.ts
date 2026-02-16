@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createChatIdentity, getChatIdentityByDevice } from '@/db';
 
 const DEVICE_COOKIE = 'chat_device_id';
+const DEVICE_HEADER = 'x-chat-device-id';
 const DEVICE_ID_PATTERN = /^[a-f0-9]{32}$/;
 const LEGACY_DEVICE_ID_PATTERN = /^[a-z0-9]{6}$/;
 const PUBLIC_ID_PATTERN = /^[a-z0-9]{6}$/;
@@ -77,7 +78,7 @@ export interface ChatIdentity {
     shouldSetCookie: boolean;
 }
 
-function resolveDeviceId(rawCookie: string | undefined): { deviceId: string; shouldSetCookie: boolean } {
+function resolveDeviceIdFromCookie(rawCookie: string | undefined): { deviceId?: string; shouldSetCookie: boolean } {
     if (validDeviceId(rawCookie)) {
         return { deviceId: rawCookie, shouldSetCookie: false };
     }
@@ -89,12 +90,17 @@ function resolveDeviceId(rawCookie: string | undefined): { deviceId: string; sho
         };
     }
 
-    return { deviceId: generateDeviceId(), shouldSetCookie: true };
+    return { shouldSetCookie: true };
 }
 
 export async function resolveChatIdentity(req: NextRequest): Promise<ChatIdentity> {
     const rawCookie = req.cookies.get(DEVICE_COOKIE)?.value;
-    const { deviceId, shouldSetCookie } = resolveDeviceId(rawCookie);
+    const rawHeader = req.headers.get(DEVICE_HEADER)?.trim().toLowerCase();
+    const fromCookie = resolveDeviceIdFromCookie(rawCookie);
+    const fromHeader = validDeviceId(rawHeader) ? rawHeader : undefined;
+
+    const deviceId = fromCookie.deviceId ?? fromHeader ?? generateDeviceId();
+    const shouldSetCookie = fromCookie.shouldSetCookie || !!fromHeader;
 
     const existing = await getChatIdentityByDevice(deviceId);
     if (existing && PUBLIC_ID_PATTERN.test(existing.userId)) {
