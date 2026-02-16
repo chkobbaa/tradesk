@@ -102,6 +102,57 @@ function detectStandaloneDisplayMode(): boolean {
     return navigatorStandalone || mediaStandalone;
 }
 
+/* ── WAV encoder: turns raw PCM Float32 samples into a valid .wav Blob ── */
+function writeWavString(view: DataView, offset: number, str: string) {
+    for (let i = 0; i < str.length; i++) {
+        view.setUint8(offset + i, str.charCodeAt(i));
+    }
+}
+
+function encodeWavBlob(chunks: Float32Array[], sampleRate: number): Blob {
+    let totalSamples = 0;
+    for (const c of chunks) totalSamples += c.length;
+
+    const numChannels = 1;
+    const bytesPerSample = 2;
+    const dataLength = totalSamples * bytesPerSample;
+    const buffer = new ArrayBuffer(44 + dataLength);
+    const view = new DataView(buffer);
+
+    writeWavString(view, 0, 'RIFF');
+    view.setUint32(4, 36 + dataLength, true);
+    writeWavString(view, 8, 'WAVE');
+    writeWavString(view, 12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * numChannels * bytesPerSample, true);
+    view.setUint16(32, numChannels * bytesPerSample, true);
+    view.setUint16(34, bytesPerSample * 8, true);
+    writeWavString(view, 36, 'data');
+    view.setUint32(40, dataLength, true);
+
+    let pos = 44;
+    for (const chunk of chunks) {
+        for (let i = 0; i < chunk.length; i++) {
+            const s = Math.max(-1, Math.min(1, chunk[i]));
+            view.setInt16(pos, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+            pos += 2;
+        }
+    }
+
+    return new Blob([buffer], { type: 'audio/wav' });
+}
+
+interface WavRecorderState {
+    audioContext: AudioContext;
+    source: MediaStreamAudioSourceNode;
+    processor: ScriptProcessorNode;
+    gain: GainNode;
+    chunks: Float32Array[];
+}
+
 export default function ChatWidget() {
     const [open, setOpen] = useState(false);
     const [myId, setMyId] = useState('');
@@ -135,6 +186,7 @@ export default function ChatWidget() {
     const mediaStreamRef = useRef<MediaStream | null>(null);
     const voiceChunksRef = useRef<Blob[]>([]);
     const voiceRecordingStartedAtRef = useRef(0);
+    const wavRecorderRef = useRef<WavRecorderState | null>(null);
     const loadInFlightRef = useRef<Map<string, boolean>>(new Map());
     const audioElementsRef = useRef<Map<number, HTMLAudioElement>>(new Map());
     const seekingAudioIdRef = useRef<number | null>(null);
@@ -646,13 +698,49 @@ export default function ChatWidget() {
         }
     }, []);
 
+    const stopWavRecording = useCallback(async () => {
+        const wav = wavRecorderRef.current;
+        if (!wav) return;
+        wavRecorderRef.current = null;
+
+        // Disconnect audio graph
+        try { wav.processor.disconnect(); } catch { /* */ }
+        try { wav.source.disconnect(); } catch { /* */ }
+        try { wav.gain.disconnect(); } catch { /* */ }
+
+        const sampleRate = wav.audioContext.sampleRate;
+        try { await wav.audioContext.close(); } catch { /* */ }
+
+        releaseStream();
+        setRecordingVoice(false);
+        setRecordingMs(0);
+
+        if (wav.chunks.length === 0) {
+            setError('No audio captured — hold the record button a bit longer.');
+            return;
+        }
+
+        const blob = encodeWavBlob(wav.chunks, sampleRate);
+        if (blob.size <= 44) { // 44 = WAV header only, no actual audio
+            setError('No audio captured — hold the record button a bit longer.');
+            return;
+        }
+
+        const file = new File([blob], `voice-${Date.now()}.wav`, { type: 'audio/wav' });
+        await uploadFile(file);
+    }, [releaseStream]);
+
     const stopVoiceRecording = useCallback(() => {
+        // WAV mode (Apple devices)
+        if (wavRecorderRef.current) {
+            void stopWavRecording();
+            return;
+        }
+        // MediaRecorder mode (other browsers)
         const recorder = mediaRecorderRef.current;
         if (!recorder || recorder.state === 'inactive') return;
-        // Simply call stop — the onstop handler does all the work.
-        // No requestData hacks, no setTimeout race.
         recorder.stop();
-    }, []);
+    }, [stopWavRecording]);
 
     useEffect(() => {
         if (!recordingVoice) {
@@ -681,91 +769,103 @@ export default function ChatWidget() {
             return;
         }
 
-        if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+        if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
             setError('Voice recording is not supported on this device');
             return;
         }
 
         try {
-            // ALWAYS acquire a fresh mic stream — never reuse.
-            // Stale streams on iOS Home Screen silently produce zero bytes.
+            // Always acquire a fresh mic stream.
             releaseStream();
             const stream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true,
-                },
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
             });
             mediaStreamRef.current = stream;
 
-            // Choose codec: Apple → mp4/aac first; others → webm/opus first
             const isApple = detectAppleWebKitClient() || detectStandaloneDisplayMode();
-            const mimePreference = isApple
-                ? ['audio/mp4', 'audio/mp4;codecs=mp4a.40.2', 'audio/aac', 'audio/wav', 'audio/webm']
-                : ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'];
 
-            const chosenMime = mimePreference.find(t =>
-                typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(t),
-            );
+            if (isApple) {
+                // ── Apple path: bypass MediaRecorder entirely ──
+                // Use AudioContext + ScriptProcessorNode to capture raw PCM.
+                // Encode as WAV on stop. 100% reliable on iOS Safari & PWA.
+                const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+                const audioContext = new AudioCtx({ sampleRate: 16000 });
+                const source = audioContext.createMediaStreamSource(stream);
+                const processor = audioContext.createScriptProcessor(4096, 1, 1);
+                const gain = audioContext.createGain();
+                gain.gain.value = 0; // mute playback so mic doesn't echo to speakers
 
-            const recorder = chosenMime
-                ? new MediaRecorder(stream, { mimeType: chosenMime })
-                : new MediaRecorder(stream);
+                const pcmChunks: Float32Array[] = [];
+                processor.onaudioprocess = (e) => {
+                    const input = e.inputBuffer.getChannelData(0);
+                    pcmChunks.push(new Float32Array(input));
+                };
 
-            mediaRecorderRef.current = recorder;
-            voiceChunksRef.current = [];
+                source.connect(processor);
+                processor.connect(gain);
+                gain.connect(audioContext.destination);
 
-            recorder.ondataavailable = (ev: BlobEvent) => {
-                if (ev.data && ev.data.size > 0) {
-                    voiceChunksRef.current.push(ev.data);
-                }
-            };
-
-            recorder.onerror = () => {
-                releaseStream();
-                mediaRecorderRef.current = null;
-                setRecordingVoice(false);
-                setRecordingMs(0);
-                setError('Voice recording failed');
-            };
-
-            recorder.onstop = async () => {
-                // Always release mic immediately after stop
-                releaseStream();
-                mediaRecorderRef.current = null;
-                setRecordingVoice(false);
-                setRecordingMs(0);
-
-                const chunks = voiceChunksRef.current;
-                voiceChunksRef.current = [];
-
-                // Build the blob
-                const resolvedMime = recorder.mimeType || 'audio/webm';
-                const blob = new Blob(chunks, { type: resolvedMime });
-
-                if (blob.size === 0) {
-                    setError('No audio captured — hold the record button a bit longer.');
+                wavRecorderRef.current = { audioContext, source, processor, gain, chunks: pcmChunks };
+            } else {
+                // ── Non-Apple path: standard MediaRecorder ──
+                if (typeof MediaRecorder === 'undefined') {
+                    setError('Voice recording is not supported on this device');
+                    releaseStream();
                     return;
                 }
 
-                const ext = resolvedMime.includes('mp4') ? '.m4a'
-                    : resolvedMime.includes('mpeg') ? '.mp3'
-                    : resolvedMime.includes('ogg') ? '.ogg'
-                    : resolvedMime.includes('wav') ? '.wav'
-                    : '.webm';
+                const mimePreference = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'];
+                const chosenMime = mimePreference.find(t =>
+                    typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(t),
+                );
 
-                const file = new File([blob], `voice-${Date.now()}${ext}`, { type: resolvedMime });
-                await uploadFile(file);
-            };
+                const recorder = chosenMime
+                    ? new MediaRecorder(stream, { mimeType: chosenMime })
+                    : new MediaRecorder(stream);
 
-            // On iOS, calling start() WITHOUT a timeslice is far more reliable.
-            // The single ondataavailable fires on stop() with the full recording.
-            // On other browsers, timeslice is fine but not necessary.
-            if (isApple) {
-                recorder.start();            // no timeslice — one blob on stop
-            } else {
-                recorder.start(250);         // timeslice for potential streaming
+                mediaRecorderRef.current = recorder;
+                voiceChunksRef.current = [];
+
+                recorder.ondataavailable = (ev: BlobEvent) => {
+                    if (ev.data && ev.data.size > 0) {
+                        voiceChunksRef.current.push(ev.data);
+                    }
+                };
+
+                recorder.onerror = () => {
+                    releaseStream();
+                    mediaRecorderRef.current = null;
+                    setRecordingVoice(false);
+                    setRecordingMs(0);
+                    setError('Voice recording failed');
+                };
+
+                recorder.onstop = async () => {
+                    releaseStream();
+                    mediaRecorderRef.current = null;
+                    setRecordingVoice(false);
+                    setRecordingMs(0);
+
+                    const chunks = voiceChunksRef.current;
+                    voiceChunksRef.current = [];
+
+                    const resolvedMime = recorder.mimeType || 'audio/webm';
+                    const blob = new Blob(chunks, { type: resolvedMime });
+
+                    if (blob.size === 0) {
+                        setError('No audio captured — hold the record button a bit longer.');
+                        return;
+                    }
+
+                    const ext = resolvedMime.includes('mp4') ? '.m4a'
+                        : resolvedMime.includes('ogg') ? '.ogg'
+                        : '.webm';
+
+                    const file = new File([blob], `voice-${Date.now()}${ext}`, { type: resolvedMime });
+                    await uploadFile(file);
+                };
+
+                recorder.start(250);
             }
 
             voiceRecordingStartedAtRef.current = Date.now();
@@ -775,6 +875,7 @@ export default function ChatWidget() {
         } catch {
             releaseStream();
             mediaRecorderRef.current = null;
+            wavRecorderRef.current = null;
             setRecordingVoice(false);
             setRecordingMs(0);
             setError('Unable to access microphone. Check permissions and try again.');
@@ -783,14 +884,29 @@ export default function ChatWidget() {
 
     useEffect(() => {
         return () => {
+            // Cleanup MediaRecorder
             if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
                 try { mediaRecorderRef.current.stop(); } catch { /* ignore */ }
             }
             mediaRecorderRef.current = null;
+
+            // Cleanup WAV recorder
+            const wav = wavRecorderRef.current;
+            if (wav) {
+                try { wav.processor.disconnect(); } catch { /* */ }
+                try { wav.source.disconnect(); } catch { /* */ }
+                try { wav.gain.disconnect(); } catch { /* */ }
+                try { void wav.audioContext.close(); } catch { /* */ }
+                wavRecorderRef.current = null;
+            }
+
+            // Cleanup mic stream
             if (mediaStreamRef.current) {
                 mediaStreamRef.current.getTracks().forEach(t => t.stop());
                 mediaStreamRef.current = null;
             }
+
+            // Cleanup audio playback elements
             for (const audioElement of audioElementsRef.current.values()) {
                 audioElement.pause();
             }
