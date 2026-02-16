@@ -418,6 +418,7 @@ button.btn-bear:hover {
   .main-content {
     margin-left: 0;
     padding: var(--space-md);
+    padding-bottom: calc(var(--space-md) + 68px + env(safe-area-inset-bottom, 0px));
   }
 
   .control-bar {

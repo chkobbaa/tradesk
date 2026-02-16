@@ -1,0 +1,40 @@
+.mobileNav {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .mobileNav {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 120;
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 4px;
+        padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+        background: var(--bg-secondary);
+        border-top: 1px solid var(--border-color);
+        backdrop-filter: blur(12px);
+    }
+
+    .navItem {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 38px;
+        border-radius: var(--radius-sm);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        background: transparent;
+        border: 1px solid transparent;
+        text-decoration: none;
+    }
+
+    .active {
+        color: var(--color-accent);
+        background: var(--color-accent-bg);
+        border-color: var(--color-accent-border);
+    }
+}
