@@ -89,10 +89,68 @@
 
 .controls {
     display: grid;
-    grid-template-columns: 1fr auto auto auto;
+    grid-template-columns: 1fr 1fr auto auto auto;
     gap: 8px;
     padding: 10px 12px;
     border-bottom: 1px solid var(--border-subtle);
+}
+
+.iconToggle {
+    border-radius: var(--radius-sm);
+    font-size: 15px;
+    padding: 6px 10px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+}
+
+.iconOn {
+    color: var(--color-bull);
+    border-color: var(--color-bull-border);
+    background: var(--color-bull-bg);
+}
+
+.iconOff {
+    color: var(--color-bear);
+    border-color: var(--color-bear-border);
+    background: var(--color-bear-bg);
+}
+
+.newContactRow {
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr auto;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.contactList {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.contactChip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border-radius: 999px;
+    padding: 5px 10px;
+    font-size: 11px;
+}
+
+.contactMeta {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+
+.removeContact {
+    color: var(--text-muted);
+    padding-left: 4px;
 }
 
 .cookieBanner {
@@ -130,6 +188,25 @@
     word-break: break-word;
 }
 
+.attachmentWrap {
+    margin-top: 6px;
+}
+
+.attachmentImage {
+    max-width: 180px;
+    max-height: 150px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    display: block;
+}
+
+.attachmentLink {
+    display: inline-block;
+    font-size: 11px;
+    color: var(--color-accent);
+    text-decoration: underline;
+}
+
 .mine {
     align-self: flex-end;
     background: var(--color-accent-bg);
@@ -152,10 +229,15 @@
 
 .composer {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: auto 1fr auto;
     gap: 8px;
     padding: 10px 12px;
     border-top: 1px solid var(--border-subtle);
+}
+
+.fileInput {
+    max-width: 170px;
+    font-size: 11px;
 }
 
 .input,
@@ -222,5 +304,25 @@
 
     .fullscreen {
         inset: 10px 10px calc(96px + env(safe-area-inset-bottom, 0px)) 10px;
+    }
+
+    .controls {
+        grid-template-columns: 1fr 1fr auto auto;
+    }
+
+    .newContactRow {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .newContactRow button {
+        grid-column: span 2;
+    }
+
+    .composer {
+        grid-template-columns: 1fr;
+    }
+
+    .fileInput {
+        max-width: 100%;
     }
 }

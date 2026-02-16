@@ -466,13 +466,89 @@ export interface ChatMessageRecord {
     toId: string;
     message: string;
     timestamp: number;
+    attachment?: ChatAttachmentRecord;
 }
 
-export async function saveChatMessage(fromId: string, toId: string, message: string): Promise<void> {
+export interface ChatAttachmentRecord {
+    messageId: number;
+    fileName: string;
+    fileUrl: string;
+    mimeType: string;
+    fileSize: number;
+}
+
+export interface ChatContactRecord {
+    id: number;
+    ownerId: string;
+    contactId: string;
+    displayName: string;
+}
+
+export async function saveChatMessage(fromId: string, toId: string, message: string): Promise<number> {
     const db = await qs();
-    await db.execute({
+    const rs = await db.execute({
         sql: `INSERT INTO chat_messages (from_id, to_id, message, timestamp) VALUES (?, ?, ?, ?)`,
         args: [fromId, toId, message, Date.now()],
+    });
+
+    return Number(rs.lastInsertRowid || 0);
+}
+
+export async function saveChatAttachment(
+    messageId: number,
+    fileName: string,
+    fileUrl: string,
+    mimeType: string,
+    fileSize: number,
+): Promise<void> {
+    const db = await qs();
+    await db.execute({
+        sql: `
+            INSERT INTO chat_attachments (message_id, file_name, file_url, mime_type, file_size)
+            VALUES (?, ?, ?, ?, ?)
+        `,
+        args: [messageId, fileName, fileUrl, mimeType, fileSize],
+    });
+}
+
+export async function saveChatContact(ownerId: string, contactId: string, displayName: string): Promise<void> {
+    const db = await qs();
+    await db.execute({
+        sql: `
+            INSERT INTO chat_contacts (owner_id, contact_id, display_name)
+            VALUES (?, ?, ?)
+            ON CONFLICT(owner_id, contact_id)
+            DO UPDATE SET display_name = excluded.display_name
+        `,
+        args: [ownerId, contactId, displayName],
+    });
+}
+
+export async function getChatContacts(ownerId: string): Promise<ChatContactRecord[]> {
+    const db = await qs();
+    const rs = await db.execute({
+        sql: `
+            SELECT id, owner_id, contact_id, display_name
+            FROM chat_contacts
+            WHERE owner_id = ?
+            ORDER BY lower(display_name) ASC
+        `,
+        args: [ownerId],
+    });
+
+    return rs.rows.map(row => ({
+        id: Number(row.id),
+        ownerId: row.owner_id as string,
+        contactId: row.contact_id as string,
+        displayName: row.display_name as string,
+    }));
+}
+
+export async function deleteChatContact(ownerId: string, contactId: string): Promise<void> {
+    const db = await qs();
+    await db.execute({
+        sql: `DELETE FROM chat_contacts WHERE owner_id = ? AND contact_id = ?`,
+        args: [ownerId, contactId],
     });
 }
 
@@ -489,12 +565,44 @@ export async function getChatMessages(userA: string, userB: string, limit: numbe
         args: [userA, userB, userB, userA, limit],
     });
 
-    return rs.rows.map(row => ({
+    const messages = rs.rows.map(row => ({
         id: Number(row.id),
         fromId: row.from_id as string,
         toId: row.to_id as string,
         message: row.message as string,
         timestamp: Number(row.timestamp),
+    }));
+
+    if (messages.length === 0) {
+        return messages;
+    }
+
+    const messageIds = messages.map(m => m.id);
+    const placeholders = messageIds.map(() => '?').join(', ');
+    const attachmentsRs = await db.execute({
+        sql: `
+            SELECT message_id, file_name, file_url, mime_type, file_size
+            FROM chat_attachments
+            WHERE message_id IN (${placeholders})
+        `,
+        args: messageIds,
+    });
+
+    const attachmentByMessageId = new Map<number, ChatAttachmentRecord>();
+    for (const row of attachmentsRs.rows) {
+        const messageId = Number(row.message_id);
+        attachmentByMessageId.set(messageId, {
+            messageId,
+            fileName: row.file_name as string,
+            fileUrl: row.file_url as string,
+            mimeType: row.mime_type as string,
+            fileSize: Number(row.file_size),
+        });
+    }
+
+    return messages.map(message => ({
+        ...message,
+        attachment: attachmentByMessageId.get(message.id),
     }));
 }
 

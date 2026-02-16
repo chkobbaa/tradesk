@@ -161,6 +161,38 @@ export async function ensureSchema(): Promise<void> {
         `);
 
         await client.execute(`CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_identities_user_id ON chat_identities(user_id)`);
+
+        // ─── Chat Contacts ───────────────────────────────────────────────
+
+        await client.execute(`
+            CREATE TABLE IF NOT EXISTS chat_contacts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                owner_id TEXT NOT NULL,
+                contact_id TEXT NOT NULL,
+                display_name TEXT NOT NULL,
+                created_at TEXT DEFAULT (datetime('now')),
+                UNIQUE(owner_id, contact_id)
+            )
+        `);
+
+        await client.execute(`CREATE INDEX IF NOT EXISTS idx_chat_contacts_owner ON chat_contacts(owner_id)`);
+
+        // ─── Chat Attachments ───────────────────────────────────────────
+
+        await client.execute(`
+            CREATE TABLE IF NOT EXISTS chat_attachments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                message_id INTEGER NOT NULL,
+                file_name TEXT NOT NULL,
+                file_url TEXT NOT NULL,
+                mime_type TEXT NOT NULL,
+                file_size INTEGER NOT NULL,
+                created_at TEXT DEFAULT (datetime('now')),
+                FOREIGN KEY (message_id) REFERENCES chat_messages(id) ON DELETE CASCADE
+            )
+        `);
+
+        await client.execute(`CREATE INDEX IF NOT EXISTS idx_chat_attachments_message ON chat_attachments(message_id)`);
     })();
 
     return _initPromise;
