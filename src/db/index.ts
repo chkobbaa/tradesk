@@ -398,22 +398,53 @@ export async function getShadowDecisions(limit: number = 50): Promise<ShadowDeci
 export interface PushSubscriptionRecord {
     endpoint: string;
     subscription: unknown; // PushSubscription JSON
+    userId?: string;
+    deviceId?: string;
 }
 
-export async function savePushSubscription(subscription: { endpoint: string; [key: string]: unknown }): Promise<void> {
+export async function savePushSubscription(
+    subscription: { endpoint: string; [key: string]: unknown },
+    userId?: string,
+    deviceId?: string,
+): Promise<void> {
     const db = await qs();
     await db.execute({
-        sql: `INSERT OR REPLACE INTO push_subscriptions (endpoint, subscription_json) VALUES (?, ?)`,
-        args: [subscription.endpoint, JSON.stringify(subscription)],
+        sql: `
+            INSERT INTO push_subscriptions (endpoint, subscription_json, user_id, device_id)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(endpoint)
+            DO UPDATE SET
+                subscription_json = excluded.subscription_json,
+                user_id = excluded.user_id,
+                device_id = excluded.device_id
+        `,
+        args: [subscription.endpoint, JSON.stringify(subscription), userId ?? null, deviceId ?? null],
     });
 }
 
 export async function getAllPushSubscriptions(): Promise<PushSubscriptionRecord[]> {
     const db = await qs();
-    const rs = await db.execute('SELECT endpoint, subscription_json FROM push_subscriptions');
+    const rs = await db.execute('SELECT endpoint, subscription_json, user_id, device_id FROM push_subscriptions');
     return rs.rows.map(row => ({
         endpoint: row.endpoint as string,
         subscription: JSON.parse(row.subscription_json as string),
+        userId: row.user_id as string | undefined,
+        deviceId: row.device_id as string | undefined,
+    }));
+}
+
+export async function getPushSubscriptionsByUser(userId: string): Promise<PushSubscriptionRecord[]> {
+    const db = await qs();
+    const rs = await db.execute({
+        sql: `SELECT endpoint, subscription_json, user_id, device_id FROM push_subscriptions WHERE user_id = ?`,
+        args: [userId],
+    });
+
+    return rs.rows.map(row => ({
+        endpoint: row.endpoint as string,
+        subscription: JSON.parse(row.subscription_json as string),
+        userId: row.user_id as string | undefined,
+        deviceId: row.device_id as string | undefined,
     }));
 }
 
@@ -550,6 +581,23 @@ export async function deleteChatContact(ownerId: string, contactId: string): Pro
         sql: `DELETE FROM chat_contacts WHERE owner_id = ? AND contact_id = ?`,
         args: [ownerId, contactId],
     });
+}
+
+export async function getChatContactDisplayName(ownerId: string, contactId: string): Promise<string | null> {
+    const db = await qs();
+    const rs = await db.execute({
+        sql: `
+            SELECT display_name
+            FROM chat_contacts
+            WHERE owner_id = ? AND contact_id = ?
+            LIMIT 1
+        `,
+        args: [ownerId, contactId],
+    });
+
+    const row = rs.rows[0];
+    if (!row) return null;
+    return row.display_name as string;
 }
 
 export async function getChatMessages(userA: string, userB: string, limit: number = 100): Promise<ChatMessageRecord[]> {

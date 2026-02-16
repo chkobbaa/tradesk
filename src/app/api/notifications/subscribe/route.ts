@@ -1,10 +1,15 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { savePushSubscription, deletePushSubscription } from '@/db';
+import { resolveChatIdentity, setChatIdentityCookie } from '@/lib/chatIdentity';
+
+export const runtime = 'nodejs';
 
 // POST — Save a push subscription
 export async function POST(req: NextRequest) {
+    let identity: Awaited<ReturnType<typeof resolveChatIdentity>> | null = null;
     try {
+        identity = await resolveChatIdentity(req);
         const body = await req.json();
         const { subscription } = body;
 
@@ -12,13 +17,22 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Invalid subscription' }, { status: 400 });
         }
 
-        await savePushSubscription(subscription);
-        return NextResponse.json({ ok: true });
+        await savePushSubscription(subscription, identity.userId, identity.deviceId);
+
+        const res = NextResponse.json({ ok: true });
+        if (identity.shouldSetCookie) {
+            setChatIdentityCookie(res, identity.deviceId);
+        }
+        return res;
     } catch (err: unknown) {
-        return NextResponse.json(
+        const res = NextResponse.json(
             { error: err instanceof Error ? err.message : 'Internal server error' },
             { status: 500 }
         );
+        if (identity?.shouldSetCookie) {
+            setChatIdentityCookie(res, identity.deviceId);
+        }
+        return res;
     }
 }
 

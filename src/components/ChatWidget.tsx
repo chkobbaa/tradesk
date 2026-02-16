@@ -52,6 +52,17 @@ function formatBytes(bytes: number): string {
     return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = atob(base64);
+    const output = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; i++) {
+        output[i] = rawData.charCodeAt(i);
+    }
+    return output;
+}
+
 export default function ChatWidget() {
     const [open, setOpen] = useState(false);
     const [myId, setMyId] = useState('');
@@ -69,6 +80,7 @@ export default function ChatWidget() {
     const [cookiesAccepted, setCookiesAccepted] = useState(true);
     const [pushSupported, setPushSupported] = useState(false);
     const [pushEnabled, setPushEnabled] = useState(false);
+    const [unreadCount, setUnreadCount] = useState(0);
     const [fullscreen, setFullscreen] = useState(false);
     const listRef = useRef<HTMLDivElement>(null);
     const panelRef = useRef<HTMLElement>(null);
@@ -160,10 +172,26 @@ export default function ChatWidget() {
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
-        const supported = 'Notification' in window;
+        const supported = 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window;
         setPushSupported(supported);
         if (!supported) return;
-        setPushEnabled(Notification.permission === 'granted');
+
+        const hydratePushState = async () => {
+            if (Notification.permission !== 'granted') {
+                setPushEnabled(false);
+                return;
+            }
+
+            try {
+                const registration = await navigator.serviceWorker.register('/sw.js');
+                const subscription = await registration.pushManager.getSubscription();
+                setPushEnabled(!!subscription);
+            } catch {
+                setPushEnabled(false);
+            }
+        };
+
+        void hydratePushState();
     }, []);
 
     const normalizedToId = useMemo(() => toId.trim().toLowerCase(), [toId]);
@@ -188,22 +216,30 @@ export default function ChatWidget() {
                 const prevLastId = prev.length > 0 ? prev[prev.length - 1].id : null;
                 const nextMessages = data.messages as ChatMessage[];
 
-                if (
-                    pushEnabled &&
-                    typeof window !== 'undefined' &&
-                    'Notification' in window &&
-                    Notification.permission === 'granted'
-                ) {
-                    const nextIncoming = nextMessages.filter((m) => {
-                        if (m.fromId === myId) return false;
-                        if (prevLastId == null) return false;
-                        return m.id > prevLastId;
-                    });
+                const nextIncoming = nextMessages.filter((m) => {
+                    if (m.fromId === myId) return false;
+                    if (prevLastId == null) return false;
+                    return m.id > prevLastId;
+                });
 
+                if (nextIncoming.length > 0) {
                     const shouldNotifyInForeground = !(open && document.visibilityState === 'visible');
-                    if (nextIncoming.length > 0 && shouldNotifyInForeground) {
+
+                    if (shouldNotifyInForeground) {
+                        setUnreadCount((count) => count + nextIncoming.length);
+                    }
+
+                    if (
+                        pushEnabled &&
+                        typeof window !== 'undefined' &&
+                        'Notification' in window &&
+                        Notification.permission === 'granted' &&
+                        shouldNotifyInForeground
+                    ) {
                         const newest = nextIncoming[nextIncoming.length - 1];
-                        new Notification(`Message from ${newest.fromId}`, {
+                        const senderContact = contacts.find(contact => contact.contactId === newest.fromId)?.displayName;
+                        const senderLabel = senderContact || newest.fromId;
+                        new Notification(`Message from ${senderLabel}`, {
                             body: newest.message,
                             tag: `chat-${normalizedToId}`,
                         });
@@ -217,10 +253,10 @@ export default function ChatWidget() {
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load messages');
         }
-    }, [fetchWithIdentity, myId, normalizedToId, open, pushEnabled]);
+    }, [contacts, fetchWithIdentity, myId, normalizedToId, open, pushEnabled]);
 
     useEffect(() => {
-        if (!open || normalizedToId.length !== 6) return;
+        if (normalizedToId.length !== 6) return;
 
         let isActive = true;
 
@@ -230,13 +266,19 @@ export default function ChatWidget() {
         };
 
         safeLoad();
-        const timer = setInterval(safeLoad, 3000);
+        const timer = setInterval(safeLoad, open ? 3000 : 8000);
 
         return () => {
             isActive = false;
             clearInterval(timer);
         };
     }, [loadMessages, open, normalizedToId]);
+
+    useEffect(() => {
+        if (open) {
+            setUnreadCount(0);
+        }
+    }, [open]);
 
     useEffect(() => {
         if (!listRef.current) return;
@@ -280,7 +322,7 @@ export default function ChatWidget() {
                 const subscription = await registration.pushManager.getSubscription();
                 if (subscription) {
                     await subscription.unsubscribe();
-                    await fetch('/api/notifications/subscribe', {
+                    await fetchWithIdentity('/api/notifications/subscribe', {
                         method: 'DELETE',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ endpoint: subscription.endpoint }),
@@ -293,42 +335,42 @@ export default function ChatWidget() {
             return;
         }
 
-        if (Notification.permission === 'granted') {
-            setPushEnabled(true);
-            setError(null);
-            return;
-        }
+        const permission = Notification.permission === 'granted'
+            ? 'granted'
+            : await Notification.requestPermission();
 
-        const permission = await Notification.requestPermission();
         if (permission === 'granted') {
-            if ('serviceWorker' in navigator && 'PushManager' in window) {
-                try {
-                    const registration = await navigator.serviceWorker.register('/sw.js');
-                    const ready = await navigator.serviceWorker.ready;
-                    const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+            try {
+                const registration = await navigator.serviceWorker.register('/sw.js');
+                const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 
-                    if (publicKey) {
-                        const keyBytes = Uint8Array.from(atob(publicKey.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
-                        const subscription = await ready.pushManager.subscribe({
-                            userVisibleOnly: true,
-                            applicationServerKey: keyBytes,
-                        });
-
-                        await fetch('/api/notifications/subscribe', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ subscription }),
-                        });
-                    }
-
-                    void registration;
-                } catch {
-                    setError('Notifications enabled, but push subscription setup failed');
+                if (!publicKey) {
+                    throw new Error('Missing VAPID public key');
                 }
+
+                const keyBytes = urlBase64ToUint8Array(publicKey);
+                const applicationServerKey = keyBytes as unknown as BufferSource;
+
+                const existingSubscription = await registration.pushManager.getSubscription();
+                const subscription = existingSubscription || await registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey,
+                });
+
+                await fetchWithIdentity('/api/notifications/subscribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ subscription }),
+                });
+
+                setPushEnabled(true);
+                setError(null);
+                return;
+            } catch {
+                setPushEnabled(false);
+                setError('Push subscription setup failed on this device');
+                return;
             }
-            setPushEnabled(true);
-            setError(null);
-            return;
         }
 
         setPushEnabled(false);
@@ -617,8 +659,14 @@ export default function ChatWidget() {
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
                             disabled={uploading || normalizedToId.length !== 6}
+                            aria-label="Attach file"
+                            title="Attach file"
                         >
-                            {uploading ? 'Uploading…' : 'Attach File'}
+                            {uploading ? '…' : (
+                                <svg className={styles.attachIcon} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                    <path d="M16.5 6.75L8.91 14.34a3 3 0 104.24 4.24l8.13-8.13a5.25 5.25 0 10-7.42-7.42L4.97 11.9a7.5 7.5 0 1010.61 10.61l7.95-7.95" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                            )}
                         </button>
                         <span className={styles.fileName} title={selectedFileName}>{selectedFileName}</span>
                         <textarea
@@ -649,6 +697,7 @@ export default function ChatWidget() {
                 aria-label="Open chat"
                 onClick={() => setOpen(prev => !prev)}
             >
+                {unreadCount > 0 && <span className={styles.unreadBadge}>{unreadCount > 99 ? '99+' : unreadCount}</span>}
                 💬
             </button>
         </>

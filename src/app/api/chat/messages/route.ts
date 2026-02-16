@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getChatMessages, saveChatMessage } from '@/db';
+import { getChatContactDisplayName, getChatMessages, saveChatMessage } from '@/db';
 import { resolveChatIdentity, setChatIdentityCookie } from '@/lib/chatIdentity';
-import { sendPushNotification } from '@/lib/notify';
+import { sendDirectChatPushNotification } from '@/lib/notify';
 
 const ID_PATTERN = /^[a-z0-9]{6}$/;
 export const runtime = 'nodejs';
@@ -54,7 +54,13 @@ export async function POST(req: NextRequest) {
         }
 
         await saveChatMessage(me, toId, message);
-        void sendPushNotification('New chat message', `${me}: ${message.slice(0, 80)}`, `chat-text-${toId}`, '/mobile');
+        const senderName = (await getChatContactDisplayName(toId, me)) || me;
+        void sendDirectChatPushNotification({
+            recipientUserId: toId,
+            senderName,
+            preview: message.slice(0, 120),
+            excludeDeviceId: identity.deviceId,
+        });
         const res = NextResponse.json({ ok: true });
         if (identity.shouldSetCookie) {
             setChatIdentityCookie(res, identity.deviceId);

@@ -2,8 +2,8 @@ import { mkdir, writeFile } from 'fs/promises';
 import path from 'path';
 import { randomUUID } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
-import { saveChatAttachment, saveChatMessage } from '@/db';
-import { sendPushNotification } from '@/lib/notify';
+import { getChatContactDisplayName, saveChatAttachment, saveChatMessage } from '@/db';
+import { sendDirectChatPushNotification } from '@/lib/notify';
 import { resolveChatIdentity, setChatIdentityCookie } from '@/lib/chatIdentity';
 
 export const runtime = 'nodejs';
@@ -89,7 +89,13 @@ export async function POST(req: NextRequest) {
         const messageId = await saveChatMessage(identity.userId, toId, messageText);
         await saveChatAttachment(messageId, originalName, fileUrl, mimeType, file.size);
 
-        void sendPushNotification('New chat file', `${identity.userId} sent a file`, `chat-file-${toId}`, '/mobile');
+        const senderName = (await getChatContactDisplayName(toId, identity.userId)) || identity.userId;
+        void sendDirectChatPushNotification({
+            recipientUserId: toId,
+            senderName,
+            preview: `📎 ${originalName}`,
+            excludeDeviceId: identity.deviceId,
+        });
 
         const res = NextResponse.json({
             ok: true,

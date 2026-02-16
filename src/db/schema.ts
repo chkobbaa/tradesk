@@ -130,9 +130,26 @@ export async function ensureSchema(): Promise<void> {
             CREATE TABLE IF NOT EXISTS push_subscriptions (
                 endpoint TEXT PRIMARY KEY,
                 subscription_json TEXT NOT NULL,
+                user_id TEXT,
+                device_id TEXT,
                 created_at TEXT DEFAULT (datetime('now'))
             )
         `);
+
+        try {
+            await client.execute(`ALTER TABLE push_subscriptions ADD COLUMN user_id TEXT`);
+        } catch {
+            // Column already exists on migrated databases.
+        }
+
+        try {
+            await client.execute(`ALTER TABLE push_subscriptions ADD COLUMN device_id TEXT`);
+        } catch {
+            // Column already exists on migrated databases.
+        }
+
+        await client.execute(`CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id)`);
+        await client.execute(`CREATE INDEX IF NOT EXISTS idx_push_subscriptions_device_id ON push_subscriptions(device_id)`);
 
         // ─── Chat Messages ───────────────────────────────────────────────
 
