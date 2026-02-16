@@ -425,6 +425,46 @@ export async function deletePushSubscription(endpoint: string): Promise<void> {
     });
 }
 
+// ─── Chat Messages ────────────────────────────────────────────
+
+export interface ChatMessageRecord {
+    id: number;
+    fromId: string;
+    toId: string;
+    message: string;
+    timestamp: number;
+}
+
+export async function saveChatMessage(fromId: string, toId: string, message: string): Promise<void> {
+    const db = await qs();
+    await db.execute({
+        sql: `INSERT INTO chat_messages (from_id, to_id, message, timestamp) VALUES (?, ?, ?, ?)`,
+        args: [fromId, toId, message, Date.now()],
+    });
+}
+
+export async function getChatMessages(userA: string, userB: string, limit: number = 100): Promise<ChatMessageRecord[]> {
+    const db = await qs();
+    const rs = await db.execute({
+        sql: `
+            SELECT id, from_id, to_id, message, timestamp
+            FROM chat_messages
+            WHERE (from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?)
+            ORDER BY timestamp ASC
+            LIMIT ?
+        `,
+        args: [userA, userB, userB, userA, limit],
+    });
+
+    return rs.rows.map(row => ({
+        id: Number(row.id),
+        fromId: row.from_id as string,
+        toId: row.to_id as string,
+        message: row.message as string,
+        timestamp: Number(row.timestamp),
+    }));
+}
+
 // ─── Helpers ───────────────────────────────────────────────────
 
 function rowToTrade(row: Record<string, unknown>): Trade {

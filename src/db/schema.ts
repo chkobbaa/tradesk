@@ -133,6 +133,22 @@ export async function ensureSchema(): Promise<void> {
                 created_at TEXT DEFAULT (datetime('now'))
             )
         `);
+
+        // ─── Chat Messages ───────────────────────────────────────────────
+
+        await client.execute(`
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                from_id TEXT NOT NULL,
+                to_id TEXT NOT NULL,
+                message TEXT NOT NULL,
+                timestamp INTEGER NOT NULL,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        `);
+
+        await client.execute(`CREATE INDEX IF NOT EXISTS idx_chat_from_to_ts ON chat_messages(from_id, to_id, timestamp DESC)`);
+        await client.execute(`CREATE INDEX IF NOT EXISTS idx_chat_to_from_ts ON chat_messages(to_id, from_id, timestamp DESC)`);
     })();
 
     return _initPromise;

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import Sidebar from '@/components/Sidebar';
 import MobileNav from '@/components/MobileNav';
+import ChatWidget from '@/components/ChatWidget';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -30,6 +31,7 @@ export default function RootLayout({
             {children}
           </main>
           <MobileNav />
+          <ChatWidget />
         </div>
       </body>
     </html>
