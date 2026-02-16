@@ -16,13 +16,13 @@
 
 .chatFabOpen {
     width: 92px;
-    height: 34px;
+    height: 25px;
     border-radius: 10px;
     background: var(--color-bear-bg);
     border-color: var(--color-bear-border);
     color: var(--color-bear);
     font-size: 12px;
-    bottom: 16px;
+    bottom: 4px;
     top: auto;
 }
 
