@@ -111,6 +111,7 @@ export default function ChatWidget() {
     const [audioDurations, setAudioDurations] = useState<Record<number, number>>({});
     const [audioProgress, setAudioProgress] = useState<Record<number, number>>({});
     const [playingAudioId, setPlayingAudioId] = useState<number | null>(null);
+    const [audioUnsupported, setAudioUnsupported] = useState<Record<number, boolean>>({});
     const listRef = useRef<HTMLDivElement>(null);
     const panelRef = useRef<HTMLElement>(null);
     const fabRef = useRef<HTMLButtonElement>(null);
@@ -122,6 +123,7 @@ export default function ChatWidget() {
     const loadInFlightRef = useRef<Map<string, boolean>>(new Map());
     const audioElementsRef = useRef<Map<number, HTMLAudioElement>>(new Map());
     const seekingAudioIdRef = useRef<number | null>(null);
+    const microphoneAccessReadyRef = useRef(false);
     const messageCacheRef = useRef<Map<string, ChatMessage[]>>(new Map());
     const prefetchedContactsRef = useRef<Set<string>>(new Set());
     const cacheHydratedRef = useRef(false);
@@ -632,6 +634,18 @@ export default function ChatWidget() {
         }
     }, []);
 
+    const getOrCreateMicrophoneStream = useCallback(async () => {
+        const existing = mediaStreamRef.current;
+        if (existing && existing.getAudioTracks().some(track => track.readyState === 'live')) {
+            return existing;
+        }
+
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaStreamRef.current = stream;
+        microphoneAccessReadyRef.current = true;
+        return stream;
+    }, []);
+
     useEffect(() => {
         if (!recordingVoice) {
             setRecordingMs(0);
@@ -665,8 +679,7 @@ export default function ChatWidget() {
         }
 
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaStreamRef.current = stream;
+            const stream = await getOrCreateMicrophoneStream();
 
             const preferredMimeTypes = [
                 'audio/webm;codecs=opus',
@@ -700,11 +713,6 @@ export default function ChatWidget() {
             recorder.onstop = async () => {
                 const chunks = [...voiceChunksRef.current];
                 voiceChunksRef.current = [];
-
-                if (mediaStreamRef.current) {
-                    mediaStreamRef.current.getTracks().forEach(track => track.stop());
-                    mediaStreamRef.current = null;
-                }
 
                 mediaRecorderRef.current = null;
                 setRecordingVoice(false);
@@ -743,7 +751,7 @@ export default function ChatWidget() {
             setRecordingMs(0);
             setError('Unable to access microphone');
         }
-    }, [normalizedToId, recordingVoice, uploading]);
+    }, [getOrCreateMicrophoneStream, normalizedToId, recordingVoice, uploading]);
 
     useEffect(() => {
         return () => {
@@ -787,10 +795,18 @@ export default function ChatWidget() {
         }
 
         try {
+            audioElement.load();
             await audioElement.play();
+            setAudioUnsupported(prev => ({ ...prev, [messageId]: false }));
             setPlayingAudioId(messageId);
-        } catch {
-            setError('Unable to play this voice message');
+        } catch (err) {
+            const name = err instanceof DOMException ? err.name : '';
+            if (name === 'AbortError') {
+                return;
+            }
+
+            setAudioUnsupported(prev => ({ ...prev, [messageId]: true }));
+            setError('Unable to play voice message on this browser codec');
         }
     }, [playingAudioId]);
 
@@ -1228,6 +1244,9 @@ export default function ChatWidget() {
                                                             className={styles.voiceNative}
                                                             preload="metadata"
                                                             src={m.attachment.fileUrl}
+                                                            onError={() => {
+                                                                setAudioUnsupported(prev => ({ ...prev, [m.id]: true }));
+                                                            }}
                                                             onLoadedMetadata={(event) => {
                                                                 const duration = event.currentTarget.duration;
                                                                 if (Number.isFinite(duration) && duration > 0) {
@@ -1250,6 +1269,15 @@ export default function ChatWidget() {
                                                                 setPlayingAudioId(prev => (prev === m.id ? null : prev));
                                                             }}
                                                         />
+                                                        {audioUnsupported[m.id] && (
+                                                            <a
+                                                                className={styles.voiceFallbackLink}
+                                                                href={m.attachment.fileUrl}
+                                                                download={m.attachment.fileName}
+                                                            >
+                                                                Open
+                                                            </a>
+                                                        )}
                                                     </div>
                                                 ) : m.attachment.mimeType.startsWith('image/') ? (
                                                     <button

@@ -442,6 +442,13 @@
     display: none;
 }
 
+.voiceFallbackLink {
+    font-size: 10px;
+    color: var(--color-accent);
+    text-decoration: underline;
+    margin-left: 4px;
+}
+
 .attachmentLink {
     display: inline-block;
     font-size: 11px;
