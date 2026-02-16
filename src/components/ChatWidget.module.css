@@ -368,6 +368,74 @@
     height: 32px;
 }
 
+.voiceCard {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 220px;
+    max-width: min(320px, 100%);
+    padding: 10px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+}
+
+.voicePlayBtn {
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    border: none;
+    background: var(--text-primary);
+    color: var(--bg-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.voiceWave {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    height: 28px;
+    flex: 1;
+    overflow: hidden;
+    border-radius: 8px;
+}
+
+.voiceWaveFill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+    pointer-events: none;
+    transition: width 120ms linear;
+}
+
+.voiceWaveBar {
+    width: 3px;
+    border-radius: 999px;
+    background: var(--text-primary);
+    opacity: 0.82;
+    position: relative;
+    z-index: 1;
+}
+
+.voiceDuration {
+    min-width: 34px;
+    text-align: right;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+}
+
+.voiceNative {
+    display: none;
+}
+
 .attachmentLink {
     display: inline-block;
     font-size: 11px;

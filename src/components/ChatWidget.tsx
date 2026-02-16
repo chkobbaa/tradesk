@@ -12,6 +12,7 @@ const DEVICE_ID_PATTERN = /^[a-f0-9]{32}$/;
 const CHAT_ID_PATTERN = /^[a-z0-9]{6}$/;
 const MAX_CACHED_MESSAGES = 80;
 const MAX_VOICE_RECORDING_MS = 2 * 60 * 1000;
+const VOICE_WAVE_BARS = [10, 16, 22, 14, 26, 18, 12, 24, 20, 14, 26, 18, 12, 24, 20, 14, 26, 18, 12, 22];
 
 function createDeviceId(): string {
     const bytes = new Uint8Array(16);
@@ -67,6 +68,14 @@ function formatDuration(ms: number): string {
     return `${minutes}:${seconds}`;
 }
 
+function formatAudioSeconds(seconds: number): string {
+    if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
+    const rounded = Math.floor(seconds);
+    const minutes = Math.floor(rounded / 60);
+    const secs = (rounded % 60).toString().padStart(2, '0');
+    return `${minutes}:${secs}`;
+}
+
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
     const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
     const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -99,6 +108,9 @@ export default function ChatWidget() {
     const [fullscreen, setFullscreen] = useState(false);
     const [recordingVoice, setRecordingVoice] = useState(false);
     const [recordingMs, setRecordingMs] = useState(0);
+    const [audioDurations, setAudioDurations] = useState<Record<number, number>>({});
+    const [audioProgress, setAudioProgress] = useState<Record<number, number>>({});
+    const [playingAudioId, setPlayingAudioId] = useState<number | null>(null);
     const listRef = useRef<HTMLDivElement>(null);
     const panelRef = useRef<HTMLElement>(null);
     const fabRef = useRef<HTMLButtonElement>(null);
@@ -108,6 +120,7 @@ export default function ChatWidget() {
     const voiceChunksRef = useRef<Blob[]>([]);
     const voiceRecordingStartedAtRef = useRef(0);
     const loadInFlightRef = useRef<Map<string, boolean>>(new Map());
+    const audioElementsRef = useRef<Map<number, HTMLAudioElement>>(new Map());
     const messageCacheRef = useRef<Map<string, ChatMessage[]>>(new Map());
     const prefetchedContactsRef = useRef<Set<string>>(new Set());
     const cacheHydratedRef = useRef(false);
@@ -740,8 +753,45 @@ export default function ChatWidget() {
                 mediaStreamRef.current.getTracks().forEach(track => track.stop());
                 mediaStreamRef.current = null;
             }
+            for (const audioElement of audioElementsRef.current.values()) {
+                audioElement.pause();
+            }
+            audioElementsRef.current.clear();
         };
     }, []);
+
+    const registerAudioElement = useCallback((messageId: number, element: HTMLAudioElement | null) => {
+        if (!element) {
+            audioElementsRef.current.delete(messageId);
+            return;
+        }
+        audioElementsRef.current.set(messageId, element);
+    }, []);
+
+    const toggleAudioPlayback = useCallback(async (messageId: number) => {
+        const audioElement = audioElementsRef.current.get(messageId);
+        if (!audioElement) return;
+
+        if (playingAudioId !== null && playingAudioId !== messageId) {
+            const previous = audioElementsRef.current.get(playingAudioId);
+            if (previous) {
+                previous.pause();
+            }
+        }
+
+        if (!audioElement.paused) {
+            audioElement.pause();
+            setPlayingAudioId(null);
+            return;
+        }
+
+        try {
+            await audioElement.play();
+            setPlayingAudioId(messageId);
+        } catch {
+            setError('Unable to play this voice message');
+        }
+    }, [playingAudioId]);
 
     const togglePush = async () => {
         if (!pushSupported || typeof window === 'undefined' || !('Notification' in window)) {
@@ -901,7 +951,7 @@ export default function ChatWidget() {
                 throw new Error(data?.error || 'Failed to upload file');
             }
 
-            await loadMessages();
+            await loadMessages(undefined, { silent: true, force: true });
             setError(null);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to upload file');
@@ -1095,12 +1145,63 @@ export default function ChatWidget() {
                                         {m.attachment && (
                                             <div className={styles.attachmentWrap}>
                                                 {m.attachment.mimeType.startsWith('audio/') ? (
-                                                    <audio
-                                                        className={styles.attachmentAudio}
-                                                        controls
-                                                        preload="metadata"
-                                                        src={m.attachment.fileUrl}
-                                                    />
+                                                    <div className={styles.voiceCard}>
+                                                        <button
+                                                            type="button"
+                                                            className={styles.voicePlayBtn}
+                                                            onClick={() => { void toggleAudioPlayback(m.id); }}
+                                                            aria-label={playingAudioId === m.id ? 'Pause voice message' : 'Play voice message'}
+                                                        >
+                                                            {playingAudioId === m.id ? '❚❚' : '▶'}
+                                                        </button>
+                                                        <div className={styles.voiceWave}>
+                                                            <div
+                                                                className={styles.voiceWaveFill}
+                                                                style={{ width: `${Math.max(0, Math.min(100, audioProgress[m.id] || 0))}%` }}
+                                                            />
+                                                            {VOICE_WAVE_BARS.map((height, index) => (
+                                                                <span
+                                                                    key={`${m.id}-wave-${index}`}
+                                                                    className={styles.voiceWaveBar}
+                                                                    style={{ height: `${height}px` }}
+                                                                />
+                                                            ))}
+                                                        </div>
+                                                        <span className={styles.voiceDuration}>
+                                                            {formatAudioSeconds(
+                                                                playingAudioId === m.id
+                                                                    ? ((audioDurations[m.id] || 0) * ((audioProgress[m.id] || 0) / 100))
+                                                                    : (audioDurations[m.id] || 0)
+                                                            )}
+                                                        </span>
+                                                        <audio
+                                                            ref={(element) => registerAudioElement(m.id, element)}
+                                                            className={styles.voiceNative}
+                                                            preload="metadata"
+                                                            src={m.attachment.fileUrl}
+                                                            onLoadedMetadata={(event) => {
+                                                                const duration = event.currentTarget.duration;
+                                                                if (Number.isFinite(duration) && duration > 0) {
+                                                                    setAudioDurations(prev => ({ ...prev, [m.id]: duration }));
+                                                                }
+                                                            }}
+                                                            onTimeUpdate={(event) => {
+                                                                const audioElement = event.currentTarget;
+                                                                const duration = audioElement.duration;
+                                                                const progress = duration > 0
+                                                                    ? (audioElement.currentTime / duration) * 100
+                                                                    : 0;
+                                                                setAudioProgress(prev => ({ ...prev, [m.id]: progress }));
+                                                            }}
+                                                            onEnded={() => {
+                                                                setPlayingAudioId(prev => (prev === m.id ? null : prev));
+                                                                setAudioProgress(prev => ({ ...prev, [m.id]: 0 }));
+                                                            }}
+                                                            onPause={() => {
+                                                                setPlayingAudioId(prev => (prev === m.id ? null : prev));
+                                                            }}
+                                                        />
+                                                    </div>
                                                 ) : m.attachment.mimeType.startsWith('image/') ? (
                                                     <button
                                                         className={styles.attachmentPreviewBtn}
