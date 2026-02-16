@@ -95,6 +95,7 @@ export default function ChatWidget() {
     const messageCacheRef = useRef<Map<string, ChatMessage[]>>(new Map());
     const prefetchedContactsRef = useRef<Set<string>>(new Set());
     const cacheHydratedRef = useRef(false);
+    const stickToBottomRef = useRef(true);
     const lastIncomingIdRef = useRef(0);
     const incomingPollInitializedRef = useRef(false);
 
@@ -363,6 +364,8 @@ export default function ChatWidget() {
             return;
         }
 
+        stickToBottomRef.current = true;
+
         const cached = messageCacheRef.current.get(normalizedToId);
         if (cached) {
             setMessages(cached);
@@ -481,8 +484,17 @@ export default function ChatWidget() {
 
     useEffect(() => {
         if (!listRef.current) return;
+        if (!stickToBottomRef.current) return;
         listRef.current.scrollTop = listRef.current.scrollHeight;
     }, [messages, open]);
+
+    const handleMessagesScroll = useCallback(() => {
+        const list = listRef.current;
+        if (!list) return;
+
+        const distanceFromBottom = list.scrollHeight - list.scrollTop - list.clientHeight;
+        stickToBottomRef.current = distanceFromBottom <= 56;
+    }, []);
 
     const sendMessage = async () => {
         const messageText = text.trim();
@@ -499,6 +511,7 @@ export default function ChatWidget() {
         };
 
         setText('');
+        stickToBottomRef.current = true;
         setMessages(prev => {
             const next = [...prev, optimisticMessage];
             updateThreadCache(normalizedToId, next);
@@ -868,7 +881,7 @@ export default function ChatWidget() {
                         </div>
                     )}
 
-                    <div className={styles.messages} ref={listRef}>
+                    <div className={styles.messages} ref={listRef} onScroll={handleMessagesScroll}>
                         {normalizedToId.length !== 6 ? (
                             <div className={styles.empty}>Choose a contact or enter a 6-character recipient ID to start chatting.</div>
                         ) : messages.length === 0 ? (
