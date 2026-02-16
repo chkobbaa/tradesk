@@ -5,12 +5,11 @@ import { closePosition } from '@/core/trading';
 import { fetchBinanceCandles } from '@/lib/binance';
 import { sendPushNotification } from '@/lib/notify';
 import { Trade } from '@/core/trading/types';
-import { resolveChatIdentity, setChatIdentityCookie } from '@/lib/chatIdentity';
+
+const SHARED_SHADOW_USER_ID = 'system-shadow-bot';
 
 export async function POST(req: NextRequest) {
-    let identity: Awaited<ReturnType<typeof resolveChatIdentity>> | null = null;
     try {
-        identity = await resolveChatIdentity(req);
         const body = await req.json();
         const { positionIds } = body as { positionIds: string[] };
 
@@ -18,7 +17,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Invalid positionIds' }, { status: 400 });
         }
 
-        const portfolioState = await loadShadowPortfolioState(identity.userId);
+        const portfolioState = await loadShadowPortfolioState(SHARED_SHADOW_USER_ID);
         let portfolio = {
             balance: portfolioState.balance,
             positions: portfolioState.positions,
@@ -53,14 +52,14 @@ export async function POST(req: NextRequest) {
                 closedTrades.push(executedTrade);
 
                 // Save trade
-                await saveShadowTrade(identity.userId, executedTrade, JSON.stringify({
+                await saveShadowTrade(SHARED_SHADOW_USER_ID, executedTrade, JSON.stringify({
                     score: 0,
                     reason: 'Manual Close via Dashboard',
                     timestamp: Date.now()
                 }));
 
                 // Log decision
-                await saveShadowDecision(identity.userId, {
+                await saveShadowDecision(SHARED_SHADOW_USER_ID, {
                     timestamp: Date.now(),
                     symbol: position.symbol,
                     action: 'MANUAL_CLOSE',
@@ -85,29 +84,21 @@ export async function POST(req: NextRequest) {
 
         // Save updated portfolio
         if (closedTrades.length > 0) {
-            await saveShadowPortfolioState(identity.userId, portfolio);
+            await saveShadowPortfolioState(SHARED_SHADOW_USER_ID, portfolio);
         }
 
-        const res = NextResponse.json({
+        return NextResponse.json({
             success: true,
             closedCount: closedTrades.length,
             errors,
             newBalance: portfolio.balance
         });
-        if (identity.shouldSetCookie) {
-            setChatIdentityCookie(res, identity.deviceId);
-        }
-        return res;
 
     } catch (error: unknown) {
         console.error('Manual close error:', error);
-        const res = NextResponse.json(
+        return NextResponse.json(
             { error: error instanceof Error ? error.message : 'Internal server error' },
             { status: 500 }
         );
-        if (identity?.shouldSetCookie) {
-            setChatIdentityCookie(res, identity.deviceId);
-        }
-        return res;
     }
 }

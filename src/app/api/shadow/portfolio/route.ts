@@ -1,54 +1,35 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { loadShadowPortfolioState, saveShadowPortfolioState } from '@/db';
-import { resolveChatIdentity, setChatIdentityCookie } from '@/lib/chatIdentity';
+
+const SHARED_SHADOW_USER_ID = 'system-shadow-bot';
 
 export async function GET(req: NextRequest) {
-    let identity: Awaited<ReturnType<typeof resolveChatIdentity>> | null = null;
     try {
-        identity = await resolveChatIdentity(req);
-        const state = await loadShadowPortfolioState(identity.userId);
-        const res = NextResponse.json(state);
-        if (identity.shouldSetCookie) {
-            setChatIdentityCookie(res, identity.deviceId);
-        }
-        return res;
+        const state = await loadShadowPortfolioState(SHARED_SHADOW_USER_ID);
+        return NextResponse.json(state);
     } catch (err) {
-        const res = NextResponse.json(
+        return NextResponse.json(
             { error: err instanceof Error ? err.message : 'DB error' },
             { status: 500 }
         );
-        if (identity?.shouldSetCookie) {
-            setChatIdentityCookie(res, identity.deviceId);
-        }
-        return res;
     }
 }
 
 export async function PUT(req: NextRequest) {
-    let identity: Awaited<ReturnType<typeof resolveChatIdentity>> | null = null;
     try {
-        identity = await resolveChatIdentity(req);
         const body = await req.json();
-        await saveShadowPortfolioState(identity.userId, {
+        await saveShadowPortfolioState(SHARED_SHADOW_USER_ID, {
             balance: body.balance,
             positions: body.positions,
             trades: body.trades || []
         });
 
-        const res = NextResponse.json({ success: true });
-        if (identity.shouldSetCookie) {
-            setChatIdentityCookie(res, identity.deviceId);
-        }
-        return res;
+        return NextResponse.json({ success: true });
     } catch (err) {
-        const res = NextResponse.json(
+        return NextResponse.json(
             { error: err instanceof Error ? err.message : 'DB error' },
             { status: 500 }
         );
-        if (identity?.shouldSetCookie) {
-            setChatIdentityCookie(res, identity.deviceId);
-        }
-        return res;
     }
 }

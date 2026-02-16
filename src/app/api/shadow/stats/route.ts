@@ -3,19 +3,17 @@ import { getShadowTradeStats, getShadowEquityCurve, getShadowTrades, loadShadowP
 import { fetchBinanceCandles } from '@/lib/binance';
 import { RegimeLabeler } from '@/core/signals/RegimeLabeler';
 import { NextRequest } from 'next/server';
-import { resolveChatIdentity, setChatIdentityCookie } from '@/lib/chatIdentity';
+
+const SHARED_SHADOW_USER_ID = 'system-shadow-bot';
 
 export async function GET(req: NextRequest) {
-    let identity: Awaited<ReturnType<typeof resolveChatIdentity>> | null = null;
     try {
-        identity = await resolveChatIdentity(req);
-
         const [stats, equity, trades, portfolio, decisions] = await Promise.all([
-            getShadowTradeStats(identity.userId),
-            getShadowEquityCurve(identity.userId),
-            getShadowTrades(identity.userId),
-            loadShadowPortfolioState(identity.userId),
-            getShadowDecisions(identity.userId, 30),
+            getShadowTradeStats(SHARED_SHADOW_USER_ID),
+            getShadowEquityCurve(SHARED_SHADOW_USER_ID),
+            getShadowTrades(SHARED_SHADOW_USER_ID),
+            loadShadowPortfolioState(SHARED_SHADOW_USER_ID),
+            getShadowDecisions(SHARED_SHADOW_USER_ID, 30),
         ]);
 
         const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
@@ -40,7 +38,7 @@ export async function GET(req: NextRequest) {
             ? RegimeLabeler.label(btcCandles)
             : { label: 'UNCLEAR', reason: 'No candle data', confidence: 0 };
 
-        const res = NextResponse.json({
+        return NextResponse.json({
             stats,
             equity,
             recentTrades: trades.slice(0, 50),
@@ -50,18 +48,10 @@ export async function GET(req: NextRequest) {
             currentPrice,
             prices,
         });
-        if (identity.shouldSetCookie) {
-            setChatIdentityCookie(res, identity.deviceId);
-        }
-        return res;
     } catch (err) {
-        const res = NextResponse.json(
+        return NextResponse.json(
             { error: err instanceof Error ? err.message : 'DB error' },
             { status: 500 }
         );
-        if (identity?.shouldSetCookie) {
-            setChatIdentityCookie(res, identity.deviceId);
-        }
-        return res;
     }
 }
