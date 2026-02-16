@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getChatContactDisplayName, getChatMessages, saveChatMessage } from '@/db';
+import { getChatContactDisplayName, getChatMessages, getIncomingChatMessages, saveChatMessage } from '@/db';
 import { resolveChatIdentity, setChatIdentityCookie } from '@/lib/chatIdentity';
 import { sendDirectChatPushNotification } from '@/lib/notify';
 
@@ -13,6 +13,21 @@ export async function GET(req: NextRequest) {
         const me = identity.userId;
         const { searchParams } = new URL(req.url);
         const withId = (searchParams.get('with') || '').trim().toLowerCase();
+
+        if (!withId) {
+            const incomingSinceRaw = searchParams.get('incomingSinceId');
+            const incomingSinceId = Number(incomingSinceRaw || '0');
+            if (!Number.isFinite(incomingSinceId) || incomingSinceId < 0) {
+                return NextResponse.json({ error: 'Invalid incomingSinceId' }, { status: 400 });
+            }
+
+            const incoming = await getIncomingChatMessages(me, incomingSinceId, 200);
+            const res = NextResponse.json({ me, incoming });
+            if (identity.shouldSetCookie) {
+                setChatIdentityCookie(res, identity.deviceId);
+            }
+            return res;
+        }
 
         if (!ID_PATTERN.test(withId)) {
             return NextResponse.json({ error: 'Invalid recipient id' }, { status: 400 });

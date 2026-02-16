@@ -698,6 +698,28 @@ export async function getChatMessages(userA: string, userB: string, limit: numbe
     }));
 }
 
+export async function getIncomingChatMessages(userId: string, sinceId: number, limit: number = 100): Promise<ChatMessageRecord[]> {
+    const db = await qs();
+    const rs = await db.execute({
+        sql: `
+            SELECT id, from_id, to_id, message, timestamp
+            FROM chat_messages
+            WHERE to_id = ? AND id > ?
+            ORDER BY id ASC
+            LIMIT ?
+        `,
+        args: [userId, sinceId, limit],
+    });
+
+    return rs.rows.map(row => ({
+        id: Number(row.id),
+        fromId: row.from_id as string,
+        toId: row.to_id as string,
+        message: row.message as string,
+        timestamp: Number(row.timestamp),
+    }));
+}
+
 // ─── Helpers ───────────────────────────────────────────────────
 
 function rowToTrade(row: Record<string, unknown>): Trade {

@@ -30,6 +30,8 @@ interface ChatMessage {
     toId: string;
     message: string;
     timestamp: number;
+    optimistic?: boolean;
+    failed?: boolean;
     attachment?: {
         messageId: number;
         fileName: string;
@@ -86,6 +88,9 @@ export default function ChatWidget() {
     const panelRef = useRef<HTMLElement>(null);
     const fabRef = useRef<HTMLButtonElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const messageCacheRef = useRef<Map<string, ChatMessage[]>>(new Map());
+    const lastIncomingIdRef = useRef(0);
+    const incomingPollInitializedRef = useRef(false);
 
     const fetchWithIdentity = useCallback((url: string, init?: RequestInit) => {
         const headers = new Headers(init?.headers);
@@ -201,11 +206,12 @@ export default function ChatWidget() {
         return found?.displayName;
     }, [contacts, normalizedToId]);
 
-    const loadMessages = useCallback(async () => {
-        if (normalizedToId.length !== 6) return;
+    const loadMessages = useCallback(async (contactIdOverride?: string) => {
+        const targetId = (contactIdOverride ?? normalizedToId).trim().toLowerCase();
+        if (targetId.length !== 6) return;
 
         try {
-            const res = await fetchWithIdentity(`/api/chat/messages?with=${normalizedToId}`);
+            const res = await fetchWithIdentity(`/api/chat/messages?with=${targetId}`);
             const data = await res.json();
             if (!res.ok) {
                 throw new Error(data?.error || 'Failed to load messages');
@@ -213,48 +219,48 @@ export default function ChatWidget() {
 
             if (!Array.isArray(data.messages)) return;
 
-            setMessages(prev => {
-                const prevLastId = prev.length > 0 ? prev[prev.length - 1].id : null;
-                const nextMessages = data.messages as ChatMessage[];
+            const nextMessages = data.messages as ChatMessage[];
+            messageCacheRef.current.set(targetId, nextMessages);
 
-                const nextIncoming = nextMessages.filter((m) => {
-                    if (m.fromId === myId) return false;
-                    if (prevLastId == null) return false;
-                    return m.id > prevLastId;
+            if (targetId === normalizedToId) {
+                setMessages(prev => {
+                    const localPending = prev.filter(m =>
+                        (m.optimistic || m.failed) &&
+                        m.fromId === myId &&
+                        m.toId === targetId
+                    );
+
+                    const merged = [...nextMessages];
+                    for (const pending of localPending) {
+                        if (!merged.some(serverMessage => serverMessage.id === pending.id)) {
+                            merged.push(pending);
+                        }
+                    }
+
+                    merged.sort((a, b) => a.timestamp - b.timestamp);
+                    return merged;
                 });
-
-                if (nextIncoming.length > 0) {
-                    const shouldNotifyInForeground = !(open && document.visibilityState === 'visible');
-
-                    if (shouldNotifyInForeground) {
-                        setUnreadCount((count) => count + nextIncoming.length);
-                    }
-
-                    if (
-                        pushEnabled &&
-                        typeof window !== 'undefined' &&
-                        'Notification' in window &&
-                        Notification.permission === 'granted' &&
-                        shouldNotifyInForeground
-                    ) {
-                        const newest = nextIncoming[nextIncoming.length - 1];
-                        const senderContact = contacts.find(contact => contact.contactId === newest.fromId)?.displayName;
-                        const senderLabel = senderContact || newest.fromId;
-                        new Notification(`Message from ${senderLabel}`, {
-                            body: newest.message,
-                            tag: `chat-${normalizedToId}`,
-                        });
-                    }
-                }
-
-                return nextMessages;
-            });
+            }
 
             setError(null);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load messages');
         }
-    }, [contacts, fetchWithIdentity, myId, normalizedToId, open, pushEnabled]);
+    }, [fetchWithIdentity, myId, normalizedToId]);
+
+    useEffect(() => {
+        if (normalizedToId.length !== 6) {
+            setMessages([]);
+            return;
+        }
+
+        const cached = messageCacheRef.current.get(normalizedToId);
+        if (cached) {
+            setMessages(cached);
+        }
+
+        void loadMessages(normalizedToId);
+    }, [loadMessages, normalizedToId]);
 
     useEffect(() => {
         if (normalizedToId.length !== 6) return;
@@ -266,8 +272,7 @@ export default function ChatWidget() {
             await loadMessages();
         };
 
-        safeLoad();
-        const timer = setInterval(safeLoad, open ? 3000 : 8000);
+        const timer = setInterval(safeLoad, open ? 2000 : 5000);
 
         return () => {
             isActive = false;
@@ -276,10 +281,94 @@ export default function ChatWidget() {
     }, [loadMessages, open, normalizedToId]);
 
     useEffect(() => {
-        if (open) {
-            setUnreadCount(0);
-        }
-    }, [open]);
+        if (!myId) return;
+
+        let isActive = true;
+
+        const pollIncoming = async () => {
+            if (!isActive) return;
+
+            try {
+                const res = await fetchWithIdentity(`/api/chat/messages?incomingSinceId=${lastIncomingIdRef.current}`);
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data?.error || 'Failed to poll incoming messages');
+                }
+
+                const incoming = Array.isArray(data?.incoming) ? (data.incoming as ChatMessage[]) : [];
+
+                if (incoming.length === 0) {
+                    incomingPollInitializedRef.current = true;
+                    return;
+                }
+
+                const maxSeenId = incoming.reduce((max, message) => Math.max(max, message.id), lastIncomingIdRef.current);
+
+                if (!incomingPollInitializedRef.current) {
+                    lastIncomingIdRef.current = maxSeenId;
+                    incomingPollInitializedRef.current = true;
+
+                    if (normalizedToId.length === 6 && incoming.some(message => message.fromId === normalizedToId)) {
+                        void loadMessages(normalizedToId);
+                    }
+                    return;
+                }
+
+                lastIncomingIdRef.current = maxSeenId;
+
+                let unreadDelta = 0;
+                let shouldRefreshActiveConversation = false;
+
+                for (const message of incoming) {
+                    const isFromActiveContact = message.fromId === normalizedToId;
+                    if (isFromActiveContact) {
+                        shouldRefreshActiveConversation = true;
+                    }
+
+                    const shouldNotifyNow = !open || document.visibilityState !== 'visible' || !isFromActiveContact;
+                    if (!shouldNotifyNow) {
+                        continue;
+                    }
+
+                    unreadDelta += 1;
+
+                    if (
+                        pushEnabled &&
+                        typeof window !== 'undefined' &&
+                        'Notification' in window &&
+                        Notification.permission === 'granted'
+                    ) {
+                        const senderContact = contacts.find(contact => contact.contactId === message.fromId)?.displayName;
+                        const senderLabel = senderContact || message.fromId;
+                        new Notification(`Message from ${senderLabel}`, {
+                            body: message.message,
+                            tag: `chat-${message.id}`,
+                        });
+                    }
+                }
+
+                if (unreadDelta > 0) {
+                    setUnreadCount(count => count + unreadDelta);
+                }
+
+                if (shouldRefreshActiveConversation && normalizedToId.length === 6) {
+                    void loadMessages(normalizedToId);
+                }
+
+                setError(null);
+            } catch (err) {
+                setError(err instanceof Error ? err.message : 'Failed to poll incoming messages');
+            }
+        };
+
+        void pollIncoming();
+        const timer = setInterval(pollIncoming, open ? 2000 : 5000);
+
+        return () => {
+            isActive = false;
+            clearInterval(timer);
+        };
+    }, [contacts, fetchWithIdentity, loadMessages, myId, normalizedToId, open, pushEnabled]);
 
     useEffect(() => {
         if (!listRef.current) return;
@@ -287,7 +376,25 @@ export default function ChatWidget() {
     }, [messages, open]);
 
     const sendMessage = async () => {
-        if (normalizedToId.length !== 6 || text.trim().length === 0) return;
+        const messageText = text.trim();
+        if (normalizedToId.length !== 6 || messageText.length === 0) return;
+
+        const optimisticId = -Date.now();
+        const optimisticMessage: ChatMessage = {
+            id: optimisticId,
+            fromId: myId,
+            toId: normalizedToId,
+            message: messageText,
+            timestamp: Date.now(),
+            optimistic: true,
+        };
+
+        setText('');
+        setMessages(prev => {
+            const next = [...prev, optimisticMessage];
+            messageCacheRef.current.set(normalizedToId, next.filter(m => !m.optimistic && !m.failed));
+            return next;
+        });
 
         try {
             const res = await fetchWithIdentity('/api/chat/messages', {
@@ -295,7 +402,7 @@ export default function ChatWidget() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     toId: normalizedToId,
-                    message: text,
+                    message: messageText,
                 }),
             });
             const data = await res.json();
@@ -303,10 +410,16 @@ export default function ChatWidget() {
                 throw new Error(data?.error || 'Failed to send message');
             }
 
-            setText('');
+            setMessages(prev => prev.filter(message => message.id !== optimisticId));
             await loadMessages();
             setError(null);
         } catch (err) {
+            setMessages(prev => prev.map(message => (
+                message.id === optimisticId
+                    ? { ...message, optimistic: false, failed: true }
+                    : message
+            )));
+            setText(messageText);
             setError(err instanceof Error ? err.message : 'Failed to send message');
         }
     };
@@ -542,7 +655,7 @@ export default function ChatWidget() {
                         <div className={styles.actionsRow}>
                             <button
                                 className={styles.iconBtn}
-                                onClick={loadMessages}
+                                onClick={() => { void loadMessages(); }}
                                 disabled={normalizedToId.length !== 6}
                                 aria-label="Refresh chat"
                                 title="Refresh chat"
