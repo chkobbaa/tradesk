@@ -22,7 +22,7 @@
     border-color: var(--color-bear-border);
     color: var(--color-bear);
     font-size: 12px;
-    bottom: 4px;
+    bottom: 16px;
     top: auto;
 }
 
@@ -543,7 +543,7 @@
     }
 
     .chatFabOpen {
-        bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+        bottom: calc(50px + env(safe-area-inset-bottom, 0px));
         right: 16px;
         top: auto;
     }
