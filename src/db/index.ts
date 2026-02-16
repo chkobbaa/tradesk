@@ -681,6 +681,30 @@ export async function saveChatAttachment(
     });
 }
 
+export async function getChatAttachmentByMessageId(messageId: number): Promise<ChatAttachmentRecord | null> {
+    const db = await qs();
+    const rs = await db.execute({
+        sql: `
+            SELECT message_id, file_name, file_url, mime_type, file_size
+            FROM chat_attachments
+            WHERE message_id = ?
+            LIMIT 1
+        `,
+        args: [messageId],
+    });
+
+    const row = rs.rows[0];
+    if (!row) return null;
+
+    return {
+        messageId: Number(row.message_id),
+        fileName: row.file_name as string,
+        fileUrl: row.file_url as string,
+        mimeType: row.mime_type as string,
+        fileSize: Number(row.file_size),
+    };
+}
+
 export async function saveChatContact(ownerId: string, contactId: string, displayName: string): Promise<void> {
     const db = await qs();
     await db.execute({
@@ -781,7 +805,7 @@ export async function getChatMessages(userA: string, userB: string, limit: numbe
         attachmentByMessageId.set(messageId, {
             messageId,
             fileName: row.file_name as string,
-            fileUrl: row.file_url as string,
+            fileUrl: `/api/chat/attachments/${messageId}`,
             mimeType: row.mime_type as string,
             fileSize: Number(row.file_size),
         });
