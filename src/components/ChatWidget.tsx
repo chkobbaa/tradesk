@@ -46,15 +46,23 @@ interface ChatContact {
     displayName: string;
 }
 
+function formatBytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes}B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
+
 export default function ChatWidget() {
     const [open, setOpen] = useState(false);
     const [myId, setMyId] = useState('');
     const [deviceId, setDeviceId] = useState('');
     const [toId, setToId] = useState('');
     const [contacts, setContacts] = useState<ChatContact[]>([]);
+    const [showNewContact, setShowNewContact] = useState(false);
     const [newContactName, setNewContactName] = useState('');
     const [newContactId, setNewContactId] = useState('');
     const [text, setText] = useState('');
+    const [selectedFileName, setSelectedFileName] = useState('No file selected');
     const [uploading, setUploading] = useState(false);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [error, setError] = useState<string | null>(null);
@@ -159,6 +167,10 @@ export default function ChatWidget() {
     }, []);
 
     const normalizedToId = useMemo(() => toId.trim().toLowerCase(), [toId]);
+    const activeContactName = useMemo(() => {
+        const found = contacts.find(contact => contact.contactId === normalizedToId);
+        return found?.displayName;
+    }, [contacts, normalizedToId]);
 
     const loadMessages = useCallback(async () => {
         if (normalizedToId.length !== 6) return;
@@ -420,6 +432,7 @@ export default function ChatWidget() {
             setError(err instanceof Error ? err.message : 'Failed to upload file');
         } finally {
             setUploading(false);
+            setSelectedFileName('No file selected');
             if (fileInputRef.current) {
                 fileInputRef.current.value = '';
             }
@@ -433,9 +446,17 @@ export default function ChatWidget() {
             {open && (
                 <section className={panelClassName} aria-label="Chat panel" ref={panelRef}>
                     <div className={styles.header}>
-                        <div>
+                        <div className={styles.headerInfo}>
                             <div className={styles.title}>Direct Chat</div>
-                            <div className={styles.myId}>Your ID: {myId || '...'}</div>
+                            <div className={styles.subtitleRow}>
+                                <span className={styles.myId}>Your ID: {myId || '...'}</span>
+                                <span className={styles.dot}>•</span>
+                                <span className={styles.chatWith}>
+                                    {normalizedToId.length === 6
+                                        ? `Chat with ${activeContactName ? `${activeContactName} (${normalizedToId})` : normalizedToId}`
+                                        : 'No recipient selected'}
+                                </span>
+                            </div>
                         </div>
                         <div className={styles.headerActions}>
                             <button className={styles.headerBtn} onClick={() => setFullscreen(prev => !prev)} aria-label="Toggle fullscreen">
@@ -445,55 +466,65 @@ export default function ChatWidget() {
                         </div>
                     </div>
 
-                    <div className={styles.controls}>
-                        <select
-                            className={styles.input}
-                            value={normalizedToId}
-                            onChange={(e) => setToId(e.target.value)}
-                        >
-                            <option value="">Select contact…</option>
-                            {contacts.map(contact => (
-                                <option key={contact.id} value={contact.contactId}>
-                                    {contact.displayName} ({contact.contactId})
-                                </option>
-                            ))}
-                        </select>
-                        <input
-                            className={styles.input}
-                            placeholder="Recipient ID (e.g. e8f2s4)"
-                            value={toId}
-                            onChange={(e) => setToId(e.target.value)}
-                            maxLength={6}
-                        />
-                        <button className={styles.btn} onClick={loadMessages} disabled={normalizedToId.length !== 6}>Refresh</button>
-                        <button
-                            className={`${styles.iconToggle} ${pushEnabled ? styles.iconOn : styles.iconOff}`}
-                            onClick={togglePush}
-                            aria-label={pushEnabled ? 'Notifications enabled' : 'Notifications muted'}
-                            title={pushEnabled ? 'Notifications enabled' : 'Notifications muted'}
-                        >
-                            {pushEnabled ? '🔔' : '🔕'}
-                        </button>
-                        <button className={styles.btn} onClick={() => setMessages([])}>Clear</button>
+                    <div className={styles.controlsWrap}>
+                        <div className={styles.recipientRow}>
+                            <select
+                                className={styles.input}
+                                value={normalizedToId}
+                                onChange={(e) => setToId(e.target.value)}
+                            >
+                                <option value="">Saved contacts</option>
+                                {contacts.map(contact => (
+                                    <option key={contact.id} value={contact.contactId}>
+                                        {contact.displayName} ({contact.contactId})
+                                    </option>
+                                ))}
+                            </select>
+                            <input
+                                className={styles.input}
+                                placeholder="Recipient ID"
+                                value={toId}
+                                onChange={(e) => setToId(e.target.value)}
+                                maxLength={6}
+                            />
+                            <button className={styles.btn} onClick={loadMessages} disabled={normalizedToId.length !== 6}>Refresh</button>
+                        </div>
+
+                        <div className={styles.actionsRow}>
+                            <button className={styles.btn} onClick={() => setShowNewContact(prev => !prev)}>
+                                {showNewContact ? 'Hide Contact Form' : 'New Contact'}
+                            </button>
+                            <button
+                                className={`${styles.iconToggle} ${pushEnabled ? styles.iconOn : styles.iconOff}`}
+                                onClick={togglePush}
+                                aria-label={pushEnabled ? 'Notifications enabled' : 'Notifications muted'}
+                                title={pushEnabled ? 'Notifications enabled' : 'Notifications muted'}
+                            >
+                                {pushEnabled ? '🔔' : '🔕'}
+                            </button>
+                            <button className={styles.btn} onClick={() => setMessages([])}>Clear Chat</button>
+                        </div>
                     </div>
 
-                    <div className={styles.newContactRow}>
-                        <input
-                            className={styles.input}
-                            placeholder="New contact name"
-                            value={newContactName}
-                            onChange={(e) => setNewContactName(e.target.value)}
-                            maxLength={40}
-                        />
-                        <input
-                            className={styles.input}
-                            placeholder="Friend ID"
-                            value={newContactId}
-                            onChange={(e) => setNewContactId(e.target.value)}
-                            maxLength={6}
-                        />
-                        <button className={styles.btn} onClick={saveContact}>New Contact</button>
-                    </div>
+                    {showNewContact && (
+                        <div className={styles.newContactRow}>
+                            <input
+                                className={styles.input}
+                                placeholder="Contact name"
+                                value={newContactName}
+                                onChange={(e) => setNewContactName(e.target.value)}
+                                maxLength={40}
+                            />
+                            <input
+                                className={styles.input}
+                                placeholder="Friend ID"
+                                value={newContactId}
+                                onChange={(e) => setNewContactId(e.target.value)}
+                                maxLength={6}
+                            />
+                            <button className={styles.btnPrimary} onClick={saveContact}>Save Contact</button>
+                        </div>
+                    )}
 
                     {contacts.length > 0 && (
                         <div className={styles.contactList}>
@@ -529,9 +560,9 @@ export default function ChatWidget() {
 
                     <div className={styles.messages} ref={listRef}>
                         {normalizedToId.length !== 6 ? (
-                            <div className={styles.empty}>Enter a 6-character recipient ID to start chatting.</div>
+                            <div className={styles.empty}>Choose a contact or enter a 6-character recipient ID to start chatting.</div>
                         ) : messages.length === 0 ? (
-                            <div className={styles.empty}>No messages yet.</div>
+                            <div className={styles.empty}>No messages yet. Send a message or share a file to begin.</div>
                         ) : (
                             messages.map((m) => {
                                 const mine = m.fromId === myId;
@@ -553,7 +584,7 @@ export default function ChatWidget() {
                                                     </a>
                                                 ) : (
                                                     <a className={styles.attachmentLink} href={m.attachment.fileUrl} target="_blank" rel="noreferrer">
-                                                        {m.attachment.fileName}
+                                                        {m.attachment.fileName} · {formatBytes(m.attachment.fileSize)}
                                                     </a>
                                                 )}
                                             </div>
@@ -572,22 +603,41 @@ export default function ChatWidget() {
                             ref={fileInputRef}
                             type="file"
                             accept=".png,.jpg,.jpeg,.gif,.webp,.svg,.pdf,.txt,.md,.csv,.json,.zip,.rar,image/*,application/pdf,text/plain,text/markdown,text/csv,application/json,application/zip,application/x-rar-compressed,application/vnd.rar"
-                            className={styles.fileInput}
+                            className={styles.fileInputHidden}
                             onChange={(e) => {
                                 const file = e.target.files?.[0];
                                 if (file) {
+                                    setSelectedFileName(file.name);
                                     void uploadFile(file);
                                 }
                             }}
                         />
+                        <button
+                            className={styles.btn}
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={uploading || normalizedToId.length !== 6}
+                        >
+                            {uploading ? 'Uploading…' : 'Attach File'}
+                        </button>
+                        <span className={styles.fileName} title={selectedFileName}>{selectedFileName}</span>
                         <textarea
-                            className={styles.textarea}
+                            className={styles.messageInput}
                             placeholder="Type message..."
                             value={text}
                             onChange={(e) => setText(e.target.value)}
                             maxLength={500}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    void sendMessage();
+                                }
+                            }}
                         />
-                        <button className={styles.btnPrimary} onClick={sendMessage} disabled={uploading}>Send</button>
+                        <button className={styles.btnPrimary} onClick={sendMessage} disabled={uploading || text.trim().length === 0 || normalizedToId.length !== 6}>Send</button>
+                    </div>
+                    <div className={styles.composerHint}>
+                        Press Enter to send • Shift+Enter for a new line
                     </div>
                     {error && <div className={styles.hint}>{error}</div>}
                 </section>

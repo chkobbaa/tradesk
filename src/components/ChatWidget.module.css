@@ -2,13 +2,14 @@
     position: fixed;
     right: 16px;
     bottom: 16px;
-    width: 48px;
-    height: 48px;
+    width: 52px;
+    height: 52px;
     border-radius: 999px;
     border: 1px solid var(--color-accent-border);
     background: var(--color-accent-bg);
     color: var(--color-accent);
-    font-size: 20px;
+    font-size: 22px;
+    box-shadow: var(--shadow-md);
     z-index: 130;
 }
 
@@ -16,12 +17,12 @@
     position: fixed;
     right: 16px;
     bottom: 72px;
-    width: min(380px, calc(100vw - 32px));
-    height: min(520px, calc(100vh - 120px));
-    min-width: 320px;
-    min-height: 360px;
+    width: min(440px, calc(100vw - 32px));
+    height: min(640px, calc(100vh - 120px));
+    min-width: 360px;
+    min-height: 460px;
     max-width: calc(100vw - 32px);
-    max-height: calc(100vh - 100px);
+    max-height: calc(100vh - 92px);
     display: flex;
     flex-direction: column;
     border: 1px solid var(--border-color);
@@ -48,15 +49,27 @@
 .header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     padding: 12px;
     border-bottom: 1px solid var(--border-color);
     background: var(--bg-tertiary);
 }
 
+.headerInfo {
+    min-width: 0;
+}
+
 .title {
-    font-size: 13px;
+    font-size: 16px;
     font-weight: 700;
+}
+
+.subtitleRow {
+    margin-top: 3px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
 }
 
 .myId {
@@ -65,12 +78,17 @@
     font-family: var(--font-mono);
 }
 
-.closeBtn {
-    border: none;
-    background: transparent;
+.dot {
     color: var(--text-muted);
-    font-size: 14px;
-    padding: 2px 6px;
+    font-size: 10px;
+}
+
+.chatWith {
+    color: var(--text-muted);
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .headerActions {
@@ -82,25 +100,85 @@
     border: 1px solid var(--border-color);
     background: var(--bg-secondary);
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: 14px;
     padding: 4px 8px;
     border-radius: var(--radius-sm);
 }
 
-.controls {
-    display: grid;
-    grid-template-columns: 1fr 1fr auto auto auto;
+.controlsWrap {
+    display: flex;
+    flex-direction: column;
     gap: 8px;
     padding: 10px 12px;
     border-bottom: 1px solid var(--border-subtle);
 }
 
-.iconToggle {
+.recipientRow,
+.actionsRow {
+    display: grid;
+    gap: 8px;
+    align-items: center;
+}
+
+.recipientRow {
+    grid-template-columns: minmax(0, 1.2fr) minmax(120px, 1fr) auto;
+}
+
+.actionsRow {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.input,
+.messageInput {
+    width: 100%;
+    appearance: none;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
-    font-size: 15px;
-    padding: 6px 10px;
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    padding: 8px 10px;
+    outline: none;
+}
+
+.input:focus,
+.messageInput:focus {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px var(--color-accent-bg);
+}
+
+.btn,
+.btnPrimary,
+.iconToggle {
+    appearance: none;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    padding: 8px 11px;
     border: 1px solid var(--border-color);
     background: var(--bg-tertiary);
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+
+.btnPrimary {
+    border-color: var(--color-accent-border);
+    background: var(--color-accent-bg);
+    color: var(--color-accent);
+    font-weight: 600;
+}
+
+.btn:disabled,
+.btnPrimary:disabled,
+.iconToggle:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.iconToggle {
+    width: 42px;
+    padding: 8px 0;
+    font-size: 16px;
 }
 
 .iconOn {
@@ -117,18 +195,20 @@
 
 .newContactRow {
     display: grid;
-    grid-template-columns: 1.1fr 0.9fr auto;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr) auto;
     gap: 8px;
-    padding: 8px 12px;
+    padding: 0 12px 10px;
     border-bottom: 1px solid var(--border-subtle);
 }
 
 .contactList {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    padding: 8px 12px;
+    gap: 6px;
+    padding: 8px 12px 10px;
     border-bottom: 1px solid var(--border-subtle);
+    max-height: 86px;
+    overflow: auto;
 }
 
 .contactChip {
@@ -139,8 +219,9 @@
     background: var(--bg-tertiary);
     color: var(--text-primary);
     border-radius: 999px;
-    padding: 5px 10px;
+    padding: 4px 10px;
     font-size: 11px;
+    max-width: 100%;
 }
 
 .contactMeta {
@@ -150,7 +231,7 @@
 
 .removeContact {
     color: var(--text-muted);
-    padding-left: 4px;
+    padding-left: 2px;
 }
 
 .cookieBanner {
@@ -166,24 +247,27 @@
 }
 
 .messages {
-    padding: 10px 12px;
+    padding: 12px;
     overflow: auto;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
     min-height: 160px;
+    flex: 1;
 }
 
 .empty {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--text-muted);
+    text-align: center;
+    margin: auto 0;
 }
 
 .bubble {
-    max-width: 85%;
-    padding: 8px 10px;
-    border-radius: 10px;
-    font-size: 12px;
+    max-width: min(88%, 420px);
+    padding: 9px 11px;
+    border-radius: 12px;
+    font-size: 13px;
     line-height: 1.35;
     word-break: break-word;
 }
@@ -193,8 +277,8 @@
 }
 
 .attachmentImage {
-    max-width: 180px;
-    max-height: 150px;
+    max-width: min(240px, 100%);
+    max-height: 180px;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border-color);
     display: block;
@@ -205,6 +289,10 @@
     font-size: 11px;
     color: var(--color-accent);
     text-decoration: underline;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .mine {
@@ -220,7 +308,7 @@
 }
 
 .meta {
-    margin-top: 4px;
+    margin-top: 6px;
     display: block;
     color: var(--text-muted);
     font-size: 10px;
@@ -229,63 +317,43 @@
 
 .composer {
     display: grid;
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
     gap: 8px;
     padding: 10px 12px;
     border-top: 1px solid var(--border-subtle);
+    background: var(--bg-secondary);
 }
 
-.fileInput {
-    max-width: 170px;
+.fileInputHidden {
+    display: none;
+}
+
+.fileName {
     font-size: 11px;
-}
-
-.input,
-.textarea {
-    width: 100%;
-}
-
-.btn,
-.btnPrimary {
-    appearance: none;
-    border-radius: var(--radius-sm);
-    font-size: 12px;
-    padding: 7px 10px;
-    border: 1px solid var(--border-color);
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
+    color: var(--text-muted);
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
 }
 
-.btnPrimary {
-    border-color: var(--color-accent-border);
-    background: var(--color-accent-bg);
-    color: var(--color-accent);
+.messageInput {
+    min-height: 40px;
+    max-height: 120px;
+    resize: none;
+    line-height: 1.35;
 }
 
-.btn:disabled,
-.btnPrimary:disabled {
-    opacity: 0.55;
-}
-
-.textarea {
-    min-height: 56px;
-    max-height: 180px;
-    resize: vertical;
-    appearance: none;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
-    color: var(--text-primary);
-    font-family: var(--font-sans);
-    font-size: 13px;
-    padding: var(--space-sm) var(--space-md);
-    outline: none;
+.composerHint {
+    color: var(--text-muted);
+    font-size: 10px;
+    padding: 0 12px 8px;
 }
 
 .hint {
-    font-size: 10px;
-    color: var(--text-muted);
+    font-size: 11px;
+    color: var(--color-bear);
     padding: 0 12px 10px;
 }
 
@@ -299,6 +367,7 @@
         left: 16px;
         width: auto;
         min-width: 0;
+        min-height: 400px;
         resize: none;
     }
 
@@ -306,8 +375,29 @@
         inset: 10px 10px calc(96px + env(safe-area-inset-bottom, 0px)) 10px;
     }
 
-    .controls {
-        grid-template-columns: 1fr 1fr auto auto;
+    .subtitleRow {
+        display: block;
+    }
+
+    .dot {
+        display: none;
+    }
+
+    .chatWith {
+        display: block;
+        margin-top: 2px;
+    }
+
+    .recipientRow {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .recipientRow button {
+        grid-column: span 2;
+    }
+
+    .actionsRow {
+        grid-template-columns: 1fr auto auto;
     }
 
     .newContactRow {
@@ -319,10 +409,25 @@
     }
 
     .composer {
-        grid-template-columns: 1fr;
+        grid-template-columns: 1fr auto;
+        grid-template-areas:
+            'file file'
+            'input send';
     }
 
-    .fileInput {
-        max-width: 100%;
+    .composer > button:first-of-type {
+        grid-area: file;
+    }
+
+    .fileName {
+        display: none;
+    }
+
+    .messageInput {
+        grid-area: input;
+    }
+
+    .composer > button:last-of-type {
+        grid-area: send;
     }
 }
