@@ -10,7 +10,7 @@ import { sendPushNotification } from '@/lib/notify';
 const MAX_HOLD_MS = 4 * 60 * 60 * 1000; // 4 hours max hold
 const SL_PCT = 0.015; // 1.5% stop loss
 const TP_PCT = 0.030; // 3.0% take profit (2:1 R:R)
-const SYSTEM_USER_ID = 'system-cron-bot';
+const SYSTEM_USER_ID = 'system-shadow-bot';
 
 export async function GET(req: NextRequest) {
     // 1. Security Check

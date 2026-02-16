@@ -14,6 +14,13 @@ async function qs() {
     return getClient();
 }
 
+const SHARED_SHADOW_USER_ID = 'system-shadow-bot';
+const LEGACY_SHADOW_USER_ID = 'system-cron-bot';
+
+function isSharedShadowScope(userId: string): boolean {
+    return userId === SHARED_SHADOW_USER_ID || userId === LEGACY_SHADOW_USER_ID;
+}
+
 // ─── Trades ────────────────────────────────────────────────────
 
 export async function saveTrade(userId: string, trade: Trade, indicatorSnapshot?: string): Promise<void> {
@@ -90,10 +97,31 @@ export async function getTrades(userId: string, symbol?: string): Promise<Trade[
 
 export async function getShadowTrades(userId: string, symbol?: string): Promise<Trade[]> {
     const db = await qs();
+    const useSharedScope = isSharedShadowScope(userId);
     const sql = symbol
-        ? 'SELECT * FROM shadow_trades WHERE user_id = ? AND symbol = ? ORDER BY close_time DESC'
-        : 'SELECT * FROM shadow_trades WHERE user_id = ? ORDER BY close_time DESC';
-    const args = symbol ? [userId, symbol] : [userId];
+        ? useSharedScope
+            ? `
+                SELECT * FROM shadow_trades
+                WHERE (user_id = ? OR user_id = ? OR user_id IS NULL)
+                  AND symbol = ?
+                ORDER BY close_time DESC
+            `
+            : 'SELECT * FROM shadow_trades WHERE user_id = ? AND symbol = ? ORDER BY close_time DESC'
+        : useSharedScope
+            ? `
+                SELECT * FROM shadow_trades
+                WHERE user_id = ? OR user_id = ? OR user_id IS NULL
+                ORDER BY close_time DESC
+            `
+            : 'SELECT * FROM shadow_trades WHERE user_id = ? ORDER BY close_time DESC';
+
+    const args = symbol
+        ? useSharedScope
+            ? [SHARED_SHADOW_USER_ID, LEGACY_SHADOW_USER_ID, symbol]
+            : [userId, symbol]
+        : useSharedScope
+            ? [SHARED_SHADOW_USER_ID, LEGACY_SHADOW_USER_ID]
+            : [userId];
     const rs = await db.execute({ sql, args });
     return rs.rows.map(rowToTrade);
 }
@@ -253,11 +281,33 @@ export async function loadPortfolioState(userId: string): Promise<{ balance: num
 
 export async function loadShadowPortfolioState(userId: string): Promise<{ balance: number; positions: Position[] }> {
     const db = await qs();
-    const rs = await db.execute({
-        sql: 'SELECT balance, positions_json FROM shadow_portfolio_state_user WHERE user_id = ? LIMIT 1',
-        args: [userId],
-    });
-    const row = rs.rows[0];
+    const useSharedScope = isSharedShadowScope(userId);
+
+    const rs = await db.execute(
+        useSharedScope
+            ? {
+                sql: `
+                    SELECT balance, positions_json
+                    FROM shadow_portfolio_state_user
+                    WHERE user_id = ? OR user_id = ?
+                    ORDER BY CASE WHEN user_id = ? THEN 0 ELSE 1 END, updated_at DESC
+                    LIMIT 1
+                `,
+                args: [SHARED_SHADOW_USER_ID, LEGACY_SHADOW_USER_ID, SHARED_SHADOW_USER_ID],
+            }
+            : {
+                sql: 'SELECT balance, positions_json FROM shadow_portfolio_state_user WHERE user_id = ? LIMIT 1',
+                args: [userId],
+            }
+    );
+    let row = rs.rows[0];
+
+    if (!row && useSharedScope) {
+        const legacyRs = await db.execute({
+            sql: 'SELECT balance, positions_json FROM shadow_portfolio_state WHERE id = 1 LIMIT 1',
+        });
+        row = legacyRs.rows[0];
+    }
 
     if (!row) return { balance: 10000, positions: [] };
     return {
@@ -332,8 +382,27 @@ export async function getPnLDistribution(userId: string, table: 'trades' | 'shad
 
 export async function getShadowTradeStats(userId: string) {
     const db = await qs();
-    const rs = await db.execute({
-        sql: `
+    const useSharedScope = isSharedShadowScope(userId);
+    const rs = await db.execute(
+        useSharedScope
+            ? {
+                sql: `
+        SELECT
+            COUNT(*) as total,
+            SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END) as wins,
+            SUM(CASE WHEN pnl <= 0 THEN 1 ELSE 0 END) as losses,
+            SUM(pnl) as total_pnl,
+            AVG(CASE WHEN pnl > 0 THEN pnl END) as avg_win,
+            AVG(CASE WHEN pnl <= 0 THEN pnl END) as avg_loss,
+            MAX(pnl) as best_trade,
+            MIN(pnl) as worst_trade
+        FROM shadow_trades
+        WHERE user_id = ? OR user_id = ? OR user_id IS NULL
+    `,
+                args: [SHARED_SHADOW_USER_ID, LEGACY_SHADOW_USER_ID],
+            }
+            : {
+                sql: `
         SELECT
             COUNT(*) as total,
             SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END) as wins,
@@ -346,8 +415,9 @@ export async function getShadowTradeStats(userId: string) {
         FROM shadow_trades
         WHERE user_id = ?
     `,
-        args: [userId],
-    });
+                args: [userId],
+            }
+    );
 
     const row = rs.rows[0];
     const total = Number(row.total || 0);
@@ -370,10 +440,22 @@ export async function getShadowTradeStats(userId: string) {
 
 export async function getShadowEquityCurve(userId: string, startingBalance: number = 10000) {
     const db = await qs();
-    const rs = await db.execute({
-        sql: 'SELECT close_time, pnl FROM shadow_trades WHERE user_id = ? ORDER BY close_time ASC',
-        args: [userId],
-    });
+    const useSharedScope = isSharedShadowScope(userId);
+    const rs = await db.execute(
+        useSharedScope
+            ? {
+                sql: `
+                    SELECT close_time, pnl FROM shadow_trades
+                    WHERE user_id = ? OR user_id = ? OR user_id IS NULL
+                    ORDER BY close_time ASC
+                `,
+                args: [SHARED_SHADOW_USER_ID, LEGACY_SHADOW_USER_ID],
+            }
+            : {
+                sql: 'SELECT close_time, pnl FROM shadow_trades WHERE user_id = ? ORDER BY close_time ASC',
+                args: [userId],
+            }
+    );
 
     let balance = startingBalance;
     const points: { time: number; balance: number }[] = [];
@@ -417,10 +499,23 @@ export async function saveShadowDecision(userId: string, d: ShadowDecisionLog): 
 
 export async function getShadowDecisions(userId: string, limit: number = 50): Promise<ShadowDecisionLog[]> {
     const db = await qs();
-    const rs = await db.execute({
-        sql: `SELECT * FROM shadow_decisions WHERE user_id = ? ORDER BY timestamp DESC LIMIT ?`,
-        args: [userId, limit],
-    });
+    const useSharedScope = isSharedShadowScope(userId);
+    const rs = await db.execute(
+        useSharedScope
+            ? {
+                sql: `
+                    SELECT * FROM shadow_decisions
+                    WHERE user_id = ? OR user_id = ? OR user_id IS NULL
+                    ORDER BY timestamp DESC
+                    LIMIT ?
+                `,
+                args: [SHARED_SHADOW_USER_ID, LEGACY_SHADOW_USER_ID, limit],
+            }
+            : {
+                sql: `SELECT * FROM shadow_decisions WHERE user_id = ? ORDER BY timestamp DESC LIMIT ?`,
+                args: [userId, limit],
+            }
+    );
 
     return rs.rows.map(row => ({
         id: Number(row.id),
