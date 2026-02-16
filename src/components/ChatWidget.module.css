@@ -441,6 +441,22 @@
     padding: 0 10px 6px;
 }
 
+.iconBtnActive {
+    position: relative;
+}
+
+.iconBtnActive::after {
+    content: '';
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--color-bear);
+    animation: pulseRecord 1.2s ease-in-out infinite;
+}
+
 .previewOverlay {
     position: fixed;
     inset: 0;
@@ -543,6 +559,12 @@
         opacity: 1;
         transform: scale(1) translateY(0);
     }
+}
+
+@keyframes pulseRecord {
+    0% { opacity: 0.3; transform: scale(0.8); }
+    50% { opacity: 1; transform: scale(1); }
+    100% { opacity: 0.3; transform: scale(0.8); }
 }
 
 .hint {

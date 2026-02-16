@@ -11,6 +11,7 @@ const LAST_INCOMING_STORAGE_PREFIX = 'tradesk-chat-last-incoming-v1';
 const DEVICE_ID_PATTERN = /^[a-f0-9]{32}$/;
 const CHAT_ID_PATTERN = /^[a-z0-9]{6}$/;
 const MAX_CACHED_MESSAGES = 80;
+const MAX_VOICE_RECORDING_MS = 2 * 60 * 1000;
 
 function createDeviceId(): string {
     const bytes = new Uint8Array(16);
@@ -59,6 +60,13 @@ function formatBytes(bytes: number): string {
     return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
+function formatDuration(ms: number): string {
+    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+    const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+    const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+    return `${minutes}:${seconds}`;
+}
+
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
     const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
     const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -90,6 +98,7 @@ export default function ChatWidget() {
     const [unreadCount, setUnreadCount] = useState(0);
     const [fullscreen, setFullscreen] = useState(false);
     const [recordingVoice, setRecordingVoice] = useState(false);
+    const [recordingMs, setRecordingMs] = useState(0);
     const listRef = useRef<HTMLDivElement>(null);
     const panelRef = useRef<HTMLElement>(null);
     const fabRef = useRef<HTMLButtonElement>(null);
@@ -97,6 +106,8 @@ export default function ChatWidget() {
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const mediaStreamRef = useRef<MediaStream | null>(null);
     const voiceChunksRef = useRef<Blob[]>([]);
+    const voiceRecordingStartedAtRef = useRef(0);
+    const loadInFlightRef = useRef<Map<string, boolean>>(new Map());
     const messageCacheRef = useRef<Map<string, ChatMessage[]>>(new Map());
     const prefetchedContactsRef = useRef<Set<string>>(new Set());
     const cacheHydratedRef = useRef(false);
@@ -312,9 +323,18 @@ export default function ChatWidget() {
         }
     }, [myId, normalizedToId]);
 
-    const loadMessages = useCallback(async (contactIdOverride?: string, options?: { silent?: boolean }) => {
+    const loadMessages = useCallback(async (
+        contactIdOverride?: string,
+        options?: { silent?: boolean; force?: boolean; skipRetry?: boolean }
+    ) => {
         const targetId = (contactIdOverride ?? normalizedToId).trim().toLowerCase();
         if (targetId.length !== 6) return;
+
+        if (loadInFlightRef.current.get(targetId) && !options?.force) {
+            return;
+        }
+
+        loadInFlightRef.current.set(targetId, true);
 
         try {
             const res = await fetchWithIdentity(`/api/chat/messages?with=${targetId}`);
@@ -350,9 +370,16 @@ export default function ChatWidget() {
 
             setError(null);
         } catch (err) {
+            if (!options?.skipRetry) {
+                await loadMessages(targetId, { ...options, skipRetry: true, force: true });
+                return;
+            }
+
             if (!options?.silent) {
                 setError(err instanceof Error ? err.message : 'Failed to load messages');
             }
+        } finally {
+            loadInFlightRef.current.delete(targetId);
         }
     }, [fetchWithIdentity, myId, normalizedToId, updateThreadCache]);
 
@@ -591,6 +618,26 @@ export default function ChatWidget() {
         }
     }, []);
 
+    useEffect(() => {
+        if (!recordingVoice) {
+            setRecordingMs(0);
+            return;
+        }
+
+        const timer = window.setInterval(() => {
+            const elapsed = Date.now() - voiceRecordingStartedAtRef.current;
+            setRecordingMs(elapsed);
+
+            if (elapsed >= MAX_VOICE_RECORDING_MS) {
+                stopVoiceRecording();
+            }
+        }, 250);
+
+        return () => {
+            window.clearInterval(timer);
+        };
+    }, [recordingVoice, stopVoiceRecording]);
+
     const startVoiceRecording = useCallback(async () => {
         if (recordingVoice || uploading) return;
         if (normalizedToId.length !== 6) {
@@ -632,6 +679,7 @@ export default function ChatWidget() {
             };
 
             recorder.onerror = () => {
+                setRecordingVoice(false);
                 setError('Voice recording failed');
             };
 
@@ -646,6 +694,7 @@ export default function ChatWidget() {
 
                 mediaRecorderRef.current = null;
                 setRecordingVoice(false);
+                setRecordingMs(0);
 
                 if (chunks.length === 0) return;
 
@@ -667,7 +716,9 @@ export default function ChatWidget() {
             };
 
             recorder.start(300);
+            voiceRecordingStartedAtRef.current = Date.now();
             setRecordingVoice(true);
+            setRecordingMs(0);
             setError(null);
         } catch {
             if (mediaStreamRef.current) {
@@ -675,6 +726,7 @@ export default function ChatWidget() {
                 mediaStreamRef.current = null;
             }
             setRecordingVoice(false);
+            setRecordingMs(0);
             setError('Unable to access microphone');
         }
     }, [normalizedToId, recordingVoice, uploading]);
@@ -922,7 +974,7 @@ export default function ChatWidget() {
                         <div className={styles.actionsRow}>
                             <button
                                 className={styles.iconBtn}
-                                onClick={() => { void loadMessages(); }}
+                                onClick={() => { void loadMessages(undefined, { force: true }); }}
                                 disabled={normalizedToId.length !== 6}
                                 aria-label="Refresh chat"
                                 title="Refresh chat"
@@ -1126,7 +1178,7 @@ export default function ChatWidget() {
                             aria-label={recordingVoice ? 'Stop voice recording' : 'Record voice message'}
                             title={recordingVoice ? 'Stop voice recording' : 'Record voice message'}
                         >
-                            {recordingVoice ? '■' : '🎤'}
+                            {recordingVoice ? `■ ${formatDuration(recordingMs)}` : '🎤'}
                         </button>
                         <textarea
                             className={styles.messageInput}
@@ -1144,7 +1196,9 @@ export default function ChatWidget() {
                         <button className={styles.btnPrimary} onClick={sendMessage} disabled={uploading || recordingVoice || text.trim().length === 0 || normalizedToId.length !== 6}>Send</button>
                     </div>
                     <div className={styles.composerHint}>
-                        Press Enter to send • Shift+Enter for a new line
+                        {recordingVoice
+                            ? `Recording ${formatDuration(recordingMs)} • tap stop to send`
+                            : 'Press Enter to send • Shift+Enter for a new line'}
                     </div>
                     {error && <div className={styles.hint}>{error}</div>}
                 </section>
