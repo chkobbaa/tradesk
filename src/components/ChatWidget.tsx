@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styles from './ChatWidget.module.css';
 
 const DEVICE_STORAGE_KEY = 'tradesk-chat-device-id';
@@ -121,6 +121,7 @@ export default function ChatWidget() {
     const voiceRecordingStartedAtRef = useRef(0);
     const loadInFlightRef = useRef<Map<string, boolean>>(new Map());
     const audioElementsRef = useRef<Map<number, HTMLAudioElement>>(new Map());
+    const seekingAudioIdRef = useRef<number | null>(null);
     const messageCacheRef = useRef<Map<string, ChatMessage[]>>(new Map());
     const prefetchedContactsRef = useRef<Set<string>>(new Set());
     const cacheHydratedRef = useRef(false);
@@ -793,6 +794,43 @@ export default function ChatWidget() {
         }
     }, [playingAudioId]);
 
+    const seekAudioFromPointer = useCallback((messageId: number, clientX: number, waveformElement: HTMLDivElement) => {
+        const audioElement = audioElementsRef.current.get(messageId);
+        if (!audioElement) return;
+
+        const duration = audioElement.duration;
+        if (!Number.isFinite(duration) || duration <= 0) return;
+
+        const rect = waveformElement.getBoundingClientRect();
+        if (rect.width <= 0) return;
+
+        const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+        audioElement.currentTime = duration * ratio;
+        setAudioProgress(prev => ({ ...prev, [messageId]: ratio * 100 }));
+    }, []);
+
+    const handleVoiceSeekStart = useCallback((messageId: number, event: ReactPointerEvent<HTMLDivElement>) => {
+        seekingAudioIdRef.current = messageId;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        seekAudioFromPointer(messageId, event.clientX, event.currentTarget);
+    }, [seekAudioFromPointer]);
+
+    const handleVoiceSeekMove = useCallback((messageId: number, event: ReactPointerEvent<HTMLDivElement>) => {
+        if (seekingAudioIdRef.current !== messageId) return;
+        seekAudioFromPointer(messageId, event.clientX, event.currentTarget);
+    }, [seekAudioFromPointer]);
+
+    const handleVoiceSeekEnd = useCallback((messageId: number, event: ReactPointerEvent<HTMLDivElement>) => {
+        if (seekingAudioIdRef.current !== messageId) return;
+        seekAudioFromPointer(messageId, event.clientX, event.currentTarget);
+        seekingAudioIdRef.current = null;
+        try {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+        } catch {
+            // Ignore release errors if pointer was already released.
+        }
+    }, [seekAudioFromPointer]);
+
     const togglePush = async () => {
         if (!pushSupported || typeof window === 'undefined' || !('Notification' in window)) {
             setError('Push notifications are not supported in this browser');
@@ -1145,7 +1183,7 @@ export default function ChatWidget() {
                                         {m.attachment && (
                                             <div className={styles.attachmentWrap}>
                                                 {m.attachment.mimeType.startsWith('audio/') ? (
-                                                    <div className={styles.voiceCard}>
+                                                    <div className={`${styles.voiceCard} ${playingAudioId === m.id ? styles.voiceCardPlaying : ''}`}>
                                                         <button
                                                             type="button"
                                                             className={styles.voicePlayBtn}
@@ -1154,7 +1192,18 @@ export default function ChatWidget() {
                                                         >
                                                             {playingAudioId === m.id ? '❚❚' : '▶'}
                                                         </button>
-                                                        <div className={styles.voiceWave}>
+                                                        <div
+                                                            className={styles.voiceWave}
+                                                            onPointerDown={(event) => handleVoiceSeekStart(m.id, event)}
+                                                            onPointerMove={(event) => handleVoiceSeekMove(m.id, event)}
+                                                            onPointerUp={(event) => handleVoiceSeekEnd(m.id, event)}
+                                                            onPointerCancel={(event) => handleVoiceSeekEnd(m.id, event)}
+                                                            role="slider"
+                                                            aria-label="Seek voice message"
+                                                            aria-valuemin={0}
+                                                            aria-valuemax={100}
+                                                            aria-valuenow={Math.round(audioProgress[m.id] || 0)}
+                                                        >
                                                             <div
                                                                 className={styles.voiceWaveFill}
                                                                 style={{ width: `${Math.max(0, Math.min(100, audioProgress[m.id] || 0))}%` }}
@@ -1163,7 +1212,7 @@ export default function ChatWidget() {
                                                                 <span
                                                                     key={`${m.id}-wave-${index}`}
                                                                     className={styles.voiceWaveBar}
-                                                                    style={{ height: `${height}px` }}
+                                                                    style={{ height: `${height}px`, animationDelay: `${index * 45}ms` }}
                                                                 />
                                                             ))}
                                                         </div>
