@@ -37,6 +37,10 @@ export interface ChartDecision {
     reason?: string;
 }
 
+type MarkerSeries = {
+    setMarkers: (markers: import('lightweight-charts').SeriesMarker<Time>[]) => void;
+};
+
 function toCandlestickData(candles: Candle[]): CandlestickData<Time>[] {
     return candles.map((c) => ({
         time: c.time as Time,
@@ -298,7 +302,7 @@ export default function CandleChart({
     // ─── Decision Markers ─────────────────────────────────────────
     useEffect(() => {
         if (!candleSeriesRef.current) return;
-        const series = candleSeriesRef.current as any;
+        const series = candleSeriesRef.current as unknown as Partial<MarkerSeries>;
 
         if (!decisions || decisions.length === 0) {
             if (typeof series.setMarkers === 'function') {
@@ -343,8 +347,9 @@ export default function CandleChart({
             // Sort by time is required by lightweight-charts
             .sort((a, b) => (a.time as number) - (b.time as number));
 
-        if (candleSeriesRef.current && typeof (candleSeriesRef.current as any).setMarkers === 'function') {
-            (candleSeriesRef.current as any).setMarkers(markers);
+        const markerSeries = candleSeriesRef.current as unknown as Partial<MarkerSeries>;
+        if (markerSeries && typeof markerSeries.setMarkers === 'function') {
+            markerSeries.setMarkers(markers);
         }
     }, [decisions]);
 

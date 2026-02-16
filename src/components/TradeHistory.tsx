@@ -38,6 +38,7 @@ export default function TradeHistory({ trades }: TradeHistoryProps) {
                         <span>Symbol</span>
                         <span>Side</span>
                         <span>Entry → Exit</span>
+                        <span>Spent</span>
                         <span>Qty</span>
                         <span>Fees</span>
                         <span>PnL</span>
@@ -52,6 +53,9 @@ export default function TradeHistory({ trades }: TradeHistoryProps) {
                                 ${trade.entryPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                                 {' → '}
                                 ${trade.exitPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                            </span>
+                            <span className={styles.mono}>
+                                ${(trade.entryPrice * trade.quantity).toFixed(2)}
                             </span>
                             <span className={styles.mono}>{trade.quantity.toFixed(4)}</span>
                             <span className={styles.fee}>

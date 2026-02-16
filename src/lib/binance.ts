@@ -13,10 +13,10 @@ export async function fetchBinanceCandles(
         const res = await fetch(url);
         if (!res.ok) throw new Error(`Binance API Error: ${res.statusText}`);
 
-        const data = await res.json();
+        const data = await res.json() as [number, string, string, string, string, string, ...unknown[]][];
 
         // Data format: [ [openTime, open, high, low, close, volume, closeTime, ...], ... ]
-        return data.map((d: any) => ({
+        return data.map((d) => ({
             time: d[0],
             open: parseFloat(d[1]),
             high: parseFloat(d[2]),

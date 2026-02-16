@@ -36,9 +36,14 @@ export async function sendPushNotification(
         try {
             await webpush.sendNotification(sub.subscription, payload);
             sent++;
-        } catch (err: any) {
+        } catch (err: unknown) {
             // 404 or 410 = subscription expired/invalid
-            if (err.statusCode === 404 || err.statusCode === 410) {
+            const statusCode =
+                typeof err === 'object' && err !== null && 'statusCode' in err
+                    ? (err as { statusCode?: number }).statusCode
+                    : undefined;
+
+            if (statusCode === 404 || statusCode === 410) {
                 await deletePushSubscription(sub.endpoint);
             }
             failed++;

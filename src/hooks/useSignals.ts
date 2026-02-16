@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Candle } from '@/core/market/types';
 import {
     SignalResult,
@@ -14,9 +14,6 @@ import {
 } from '@/core/signals';
 
 export function useSignals(candles: Candle[]) {
-    const [results, setResults] = useState<SignalResult[]>([]);
-    const [decision, setDecision] = useState<TradeDecision | null>(null);
-
     // Instantiate signals once
     const signals = useMemo<SignalGenerator[]>(() => [
         new TrendSignal(),
@@ -36,25 +33,19 @@ export function useSignals(candles: Candle[]) {
     const setMacroSentiment = useCallback((sentiment: SignalDirection) => {
         setMacroSentimentState(sentiment);
         macroSignal.setSentiment(sentiment);
-        // Trigger re-evaluation immediately
-        evaluateSignals();
-    }, [macroSignal]); // evaluateSignals depends on signals, which is stable
+    }, [macroSignal]);
 
-    const evaluateSignals = useCallback(() => {
-        if (!candles || candles.length === 0) return;
+    const { results, decision } = useMemo<{ results: SignalResult[]; decision: TradeDecision | null }>(() => {
+        if (!candles || candles.length === 0) {
+            return { results: [], decision: null };
+        }
 
         const context = { candles, symbol: 'BTCUSDT' }; // default symbol for context
-        const newResults = signals.map(s => s.evaluate(context));
-        setResults(newResults);
+        const nextResults = signals.map(s => s.evaluate(context));
+        const nextDecision = Resolver.resolve(nextResults);
 
-        const newDecision = Resolver.resolve(newResults);
-        setDecision(newDecision);
-    }, [candles, signals]);
-
-    // Re-evaluate when candles update
-    useEffect(() => {
-        evaluateSignals();
-    }, [candles, evaluateSignals]);
+        return { results: nextResults, decision: nextDecision };
+    }, [candles, signals, macroSentiment]);
 
     return {
         results,

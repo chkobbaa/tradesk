@@ -4,7 +4,7 @@
  * and pushes real-time candle updates every ~2 seconds.
  */
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 import { Candle, Timeframe } from '@/core/market/types';
 
 const BINANCE_WS = 'wss://stream.binance.com:9443/ws';
@@ -68,61 +68,65 @@ export function useBinanceStream({
 }: UseBinanceStreamOptions) {
     const wsRef = useRef<WebSocket | null>(null);
     const onUpdateRef = useRef(onUpdate);
+    const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Keep the callback ref up to date without re-connecting
     useEffect(() => {
         onUpdateRef.current = onUpdate;
     }, [onUpdate]);
 
-    const connect = useCallback(() => {
+    useEffect(() => {
         if (!enabled) return;
-
-        // Close existing connection
-        if (wsRef.current) {
-            wsRef.current.close();
-            wsRef.current = null;
-        }
 
         const stream = `${symbol.toLowerCase()}@kline_${TIMEFRAME_MAP[timeframe]}`;
         const url = `${BINANCE_WS}/${stream}`;
 
-        const ws = new WebSocket(url);
+        const connect = () => {
+            if (!enabled) return;
 
-        ws.onmessage = (event) => {
-            try {
-                const data: BinanceKlineEvent = JSON.parse(event.data);
-                const candle = parseKlineEvent(data);
-                onUpdateRef.current(candle, data.k.x);
-            } catch {
-                // Ignore parse errors
+            if (wsRef.current) {
+                wsRef.current.close();
+                wsRef.current = null;
             }
+
+            const ws = new WebSocket(url);
+
+            ws.onmessage = (event) => {
+                try {
+                    const data: BinanceKlineEvent = JSON.parse(event.data);
+                    const candle = parseKlineEvent(data);
+                    onUpdateRef.current(candle, data.k.x);
+                } catch {
+                    // Ignore parse errors
+                }
+            };
+
+            ws.onerror = () => {
+                // Will auto-reconnect via onclose
+            };
+
+            ws.onclose = () => {
+                if (enabled) {
+                    reconnectTimerRef.current = setTimeout(() => {
+                        connect();
+                    }, 3000);
+                }
+            };
+
+            wsRef.current = ws;
         };
 
-        ws.onerror = () => {
-            // Will auto-reconnect via onclose
-        };
-
-        ws.onclose = () => {
-            // Reconnect after 3 seconds
-            if (enabled) {
-                setTimeout(() => {
-                    connect();
-                }, 3000);
-            }
-        };
-
-        wsRef.current = ws;
-    }, [symbol, timeframe, enabled]);
-
-    // Connect/reconnect on symbol or timeframe change
-    useEffect(() => {
         connect();
 
         return () => {
+            if (reconnectTimerRef.current) {
+                clearTimeout(reconnectTimerRef.current);
+                reconnectTimerRef.current = null;
+            }
             if (wsRef.current) {
                 wsRef.current.close();
                 wsRef.current = null;
             }
         };
-    }, [connect]);
+    }, [symbol, timeframe, enabled]);
 }

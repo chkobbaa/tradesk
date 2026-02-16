@@ -195,15 +195,92 @@
 .pnlRow {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     justify-content: center;
     gap: 8px;
     margin-top: 4px;
+}
+
+.pnlLabel {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    font-weight: 600;
 }
 
 .pnlValue {
     font-size: 16px;
     font-weight: 600;
     font-family: var(--font-mono);
+}
+
+.postCloseValue {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+}
+
+.balanceBreakdown {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+}
+
+.advancedStats {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.statRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+}
+
+.modeToggle {
+    display: inline-flex;
+    align-items: center;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    padding: 2px;
+    gap: 2px;
+}
+
+.modeToggle span {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    color: var(--text-muted);
+    cursor: pointer;
+    user-select: none;
+}
+
+.modeToggle .activeMode {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+.tradesContainer {
+    width: 100%;
+}
+
+.tradesTableHeader {
+    border-bottom: 1px solid var(--border-color);
 }
 
 .pnlPct {
@@ -732,6 +809,12 @@
     font-size: 10px;
     font-family: var(--font-mono);
     color: var(--text-muted);
+}
+
+.tradeSpent {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--text-secondary);
 }
 
 /* ─── Utilities ────────────────────────────────── */

@@ -147,3 +147,28 @@
     color: var(--color-accent);
     text-decoration: underline;
 }
+
+@media (max-width: 768px) {
+    .header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+    }
+
+    .title {
+        font-size: 20px;
+    }
+
+    .cardGrid {
+        grid-template-columns: 1fr;
+    }
+
+    .table {
+        font-size: 12px;
+    }
+
+    .table th,
+    .table td {
+        padding: var(--space-xs) var(--space-sm);
+    }
+}

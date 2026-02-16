@@ -29,6 +29,8 @@ import { ShadowStatus } from '@/components/ShadowStatus';
 import { BotRunner } from '@/components/BotRunner';
 import styles from './page.module.css';
 
+type ApiDecision = ChartDecision & { symbol: string };
+
 // ─── localStorage Persistence ──────────────────────────────────
 const PORTFOLIO_KEY = 'tradesk-portfolio';
 
@@ -173,7 +175,7 @@ export default function ChartsPage() {
             .then(res => res.json())
             .then(data => {
                 if (Array.isArray(data)) {
-                    const filtered = data.filter((d: any) => d.symbol === symbol);
+                    const filtered = (data as ApiDecision[]).filter(d => d.symbol === symbol);
                     setDecisions(filtered);
                 }
             })

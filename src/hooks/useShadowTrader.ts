@@ -1,9 +1,22 @@
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { TradeDecision } from '@/core/signals';
-import { Portfolio, Position } from '@/core/trading/types';
-import { createPortfolio, openPosition, closePosition } from '@/core/trading';
+import { Portfolio, Trade } from '@/core/trading/types';
+import { openPosition, closePosition } from '@/core/trading';
 import { Candle } from '@/core/market/types';
+
+interface DecisionLogEntry {
+    timestamp: number;
+    symbol: string;
+    action: string;
+    score: number;
+    reason: string;
+    hadPosition: boolean;
+    positionSide?: 'LONG' | 'SHORT';
+    positionPnlPct?: number;
+    executed: boolean;
+    result: string;
+}
 
 /**
  * Shadow Trader v2
@@ -30,14 +43,12 @@ export function useShadowTrader(
     // Remove internal loading/saving logic
     // We rely on the parent to provide the current portfolio and handle saving
 
-    const [decisionLog, setDecisionLog] = useState<any[]>([]);
-
     // Track last processed decision timestamp to avoid re-execution
     const lastProcessedTime = useRef<number>(0);
 
 
     // Persist trade
-    const persistShadowTrade = useCallback((trade: any) => {
+    const persistShadowTrade = useCallback((trade: Trade) => {
         fetch('/api/shadow/trades', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -46,8 +57,7 @@ export function useShadowTrader(
     }, []);
 
     // Log a decision
-    const logDecision = useCallback((log: any) => {
-        setDecisionLog(prev => [log, ...prev].slice(0, 100));
+    const logDecision = useCallback((log: DecisionLogEntry) => {
         fetch('/api/shadow/decisions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -334,5 +344,5 @@ export function useShadowTrader(
 
     }, [decision, lastClosedCandle, currentPrice, symbol, persistShadowTrade, logDecision, onUpdatePortfolio]);
 
-    return { shadowPortfolio: portfolio, decisionLog };
+    return { shadowPortfolio: portfolio, decisionLog: [] as DecisionLogEntry[] };
 }

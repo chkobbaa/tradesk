@@ -319,7 +319,10 @@ export async function GET(req: NextRequest) {
             balance: portfolio.balance
         });
 
-    } catch (err: any) {
-        return NextResponse.json({ error: err.message }, { status: 500 });
+    } catch (err: unknown) {
+        return NextResponse.json(
+            { error: err instanceof Error ? err.message : 'Internal server error' },
+            { status: 500 }
+        );
     }
 }

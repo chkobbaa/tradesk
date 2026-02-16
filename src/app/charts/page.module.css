@@ -63,7 +63,25 @@
 }
 
 @media (max-width: 900px) {
+    .header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+    }
+
+    .title {
+        font-size: 20px;
+    }
+
+    .controls {
+        padding: var(--space-sm) 0;
+    }
+
     .chartTradingRow {
         grid-template-columns: 1fr;
+    }
+
+    .tradingCol {
+        position: static;
     }
 }

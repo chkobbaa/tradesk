@@ -14,8 +14,11 @@ export async function POST(req: NextRequest) {
 
         await savePushSubscription(subscription);
         return NextResponse.json({ ok: true });
-    } catch (err: any) {
-        return NextResponse.json({ error: err.message }, { status: 500 });
+    } catch (err: unknown) {
+        return NextResponse.json(
+            { error: err instanceof Error ? err.message : 'Internal server error' },
+            { status: 500 }
+        );
     }
 }
 
@@ -31,7 +34,10 @@ export async function DELETE(req: NextRequest) {
 
         await deletePushSubscription(endpoint);
         return NextResponse.json({ ok: true });
-    } catch (err: any) {
-        return NextResponse.json({ error: err.message }, { status: 500 });
+    } catch (err: unknown) {
+        return NextResponse.json(
+            { error: err instanceof Error ? err.message : 'Internal server error' },
+            { status: 500 }
+        );
     }
 }

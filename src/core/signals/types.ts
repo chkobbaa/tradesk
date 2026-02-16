@@ -16,7 +16,7 @@ export interface SignalResult {
 export interface SignalContext {
     candles: Candle[];
     symbol: string;
-    indicators?: any; // Pre-calculated indicators if needed, or signals calculate their own
+    indicators?: unknown; // Pre-calculated indicators if needed, or signals calculate their own
 }
 
 export interface SignalGenerator {

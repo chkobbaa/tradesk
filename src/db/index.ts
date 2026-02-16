@@ -397,10 +397,10 @@ export async function getShadowDecisions(limit: number = 50): Promise<ShadowDeci
 
 export interface PushSubscriptionRecord {
     endpoint: string;
-    subscription: any; // PushSubscription JSON
+    subscription: unknown; // PushSubscription JSON
 }
 
-export async function savePushSubscription(subscription: any): Promise<void> {
+export async function savePushSubscription(subscription: { endpoint: string; [key: string]: unknown }): Promise<void> {
     const db = await qs();
     await db.execute({
         sql: `INSERT OR REPLACE INTO push_subscriptions (endpoint, subscription_json) VALUES (?, ?)`,
@@ -427,7 +427,7 @@ export async function deletePushSubscription(endpoint: string): Promise<void> {
 
 // ─── Helpers ───────────────────────────────────────────────────
 
-function rowToTrade(row: any): Trade {
+function rowToTrade(row: Record<string, unknown>): Trade {
     return {
         id: row.id as string,
         symbol: row.symbol as string,

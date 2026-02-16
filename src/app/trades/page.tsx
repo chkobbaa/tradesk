@@ -211,7 +211,7 @@ export default function TradesPage() {
         return () => { window.removeEventListener('resize', handleResize); chart.remove(); distChart.current = null; };
     }, [distribution]);
 
-    const SortHeader = ({ label, field }: { label: string; field: SortKey }) => (
+    const renderSortHeader = (label: string, field: SortKey) => (
         <th
             onClick={() => handleSort(field)}
             className={sortKey === field ? styles.sortActive : ''}
@@ -355,14 +355,15 @@ export default function TradesPage() {
                         <table className={styles.table}>
                             <thead>
                                 <tr>
-                                    <SortHeader label="Date" field="closeTime" />
-                                    <SortHeader label="Symbol" field="symbol" />
-                                    <SortHeader label="Side" field="side" />
+                                    {renderSortHeader('Date', 'closeTime')}
+                                    {renderSortHeader('Symbol', 'symbol')}
+                                    {renderSortHeader('Side', 'side')}
                                     <th>Entry → Exit</th>
-                                    <SortHeader label="Qty" field="quantity" />
-                                    <SortHeader label="Duration" field="duration" />
+                                    <th>Money Spent</th>
+                                    {renderSortHeader('Qty', 'quantity')}
+                                    {renderSortHeader('Duration', 'duration')}
                                     <th>Fees</th>
-                                    <SortHeader label="P&L" field="pnl" />
+                                    {renderSortHeader('P&L', 'pnl')}
                                 </tr>
                             </thead>
                             <tbody>
@@ -389,6 +390,9 @@ export default function TradesPage() {
                                                     {' → '}
                                                     ${trade.exitPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                                                 </td>
+                                                <td className={styles.mono}>
+                                                    ${(trade.entryPrice * trade.quantity).toFixed(2)}
+                                                </td>
                                                 <td className={styles.mono}>{trade.quantity.toFixed(4)}</td>
                                                 <td className={styles.mono}>{formatDuration(duration)}</td>
                                                 <td className={styles.mono}>${(trade.entryFee + trade.exitFee).toFixed(2)}</td>
@@ -401,7 +405,7 @@ export default function TradesPage() {
                                             </tr>
                                             {isExpanded && (
                                                 <tr key={`${trade.id}-detail`} className={styles.detailRow}>
-                                                    <td colSpan={8}>
+                                                    <td colSpan={9}>
                                                         <div className={styles.detailContent}>
                                                             <div className={styles.detailItem}>
                                                                 <span className={styles.detailLabel}>Entry Time</span>
@@ -430,6 +434,10 @@ export default function TradesPage() {
                                                             <div className={styles.detailItem}>
                                                                 <span className={styles.detailLabel}>Quantity</span>
                                                                 <span className={styles.detailValue}>{trade.quantity.toFixed(6)}</span>
+                                                            </div>
+                                                            <div className={styles.detailItem}>
+                                                                <span className={styles.detailLabel}>Money Spent</span>
+                                                                <span className={styles.detailValue}>${(trade.entryPrice * trade.quantity).toFixed(6)}</span>
                                                             </div>
                                                             <div className={styles.detailItem}>
                                                                 <span className={styles.detailLabel}>Stop Loss</span>

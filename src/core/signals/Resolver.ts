@@ -24,7 +24,7 @@ export class Resolver {
 
     static resolve(signals: SignalResult[]): TradeDecision {
         let totalScore = 0;
-        let reasons: string[] = [];
+        const reasons: string[] = [];
 
         // Find specific signals
         const trend = signals.find(s => s.source === 'Trend-EMA');

@@ -411,11 +411,41 @@ button.btn-bear:hover {
 
 /* ===== Responsive ===== */
 @media (max-width: 768px) {
-  .sidebar {
-    display: none;
+  :root {
+    --sidebar-width: 0px;
   }
 
   .main-content {
+    margin-left: 0;
     padding: var(--space-md);
+  }
+
+  .control-bar {
+    gap: var(--space-sm);
+  }
+
+  .card-header {
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+  }
+
+  .loading-container {
+    padding: var(--space-lg);
+    text-align: center;
+    flex-direction: column;
+  }
+
+  .data-table {
+    font-size: 11px;
+  }
+
+  .data-table thead th,
+  .data-table tbody td {
+    padding: var(--space-xs) var(--space-sm);
+  }
+
+  .main-content {
+    width: 100%;
   }
 }

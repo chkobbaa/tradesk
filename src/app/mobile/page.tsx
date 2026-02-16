@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Trade, Position } from '@/core/trading/types';
 import styles from './page.module.css';
 
@@ -61,6 +62,10 @@ function formatSmallDate(ts: number): string {
     const d = new Date(ts);
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
         ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function formatUsd(value: number): string {
+    return `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function regimeEmoji(label: string): string {
@@ -199,7 +204,7 @@ export default function MobilePage() {
             } else {
                 alert('Error closing positions: ' + json.error);
             }
-        } catch (err) {
+        } catch {
             alert('Failed to close positions');
         }
     };
@@ -233,14 +238,26 @@ export default function MobilePage() {
     const startBalance = 10000;
     const balance = portfolio?.balance ?? startBalance;
 
-    // Calculate Unrealized PnL
-    const unrealizedPnL = positions.reduce((sum, pos) => {
-        const price = prices[pos.symbol] || (pos.symbol === 'BTCUSDT' ? btcPrice : pos.entryPrice);
-        const pnl = (price - pos.entryPrice) * pos.quantity * (pos.side === 'LONG' ? 1 : -1);
-        return sum + pnl;
-    }, 0);
+    const positionSnapshots = positions.map(pos => {
+        const markPrice = prices[pos.symbol] || (pos.symbol === 'BTCUSDT' ? btcPrice : pos.entryPrice);
+        const moneySpent = pos.entryPrice * pos.quantity;
+        const closeValue = pos.side === 'LONG'
+            ? markPrice * pos.quantity
+            : pos.quantity * (2 * pos.entryPrice - markPrice);
 
-    const totalPnL = (balance + unrealizedPnL) - startBalance;
+        return {
+            ...pos,
+            markPrice,
+            moneySpent,
+            closeValue,
+            unrealizedPnL: closeValue - moneySpent,
+        };
+    });
+
+    const moneySpent = positionSnapshots.reduce((sum, pos) => sum + pos.moneySpent, 0);
+    const postCloseBalance = balance + positionSnapshots.reduce((sum, pos) => sum + pos.closeValue, 0);
+    const unrealizedPnL = postCloseBalance - (balance + moneySpent);
+    const totalPnL = postCloseBalance - startBalance;
     const pnlPct = (totalPnL / startBalance) * 100;
 
     return (
@@ -327,24 +344,39 @@ export default function MobilePage() {
                             <div className={styles.balanceSection}>
                                 <div className={styles.balanceLabel}>Net Worth (Equity)</div>
                                 <div className={styles.balanceValue}>
-                                    ${(balance + unrealizedPnL).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    {formatUsd(postCloseBalance)}
+                                </div>
+                                <div className={styles.balanceBreakdown}>
+                                    <span>Cash: {formatUsd(balance)}</span>
+                                    <span>Money Spent: {formatUsd(moneySpent)}</span>
                                 </div>
                                 <div className={styles.pnlRow}>
                                     <span className={styles.pnlLabel}>Unrealized PnL:</span>
                                     <span className={`${styles.pnlValue} ${unrealizedPnL >= 0 ? styles.green : styles.red}`}>
-                                        {unrealizedPnL >= 0 ? '+' : ''}${Math.abs(unrealizedPnL).toFixed(2)}
+                                        {unrealizedPnL >= 0 ? '+' : '-'}{formatUsd(Math.abs(unrealizedPnL))}
+                                    </span>
+                                    <span className={styles.postCloseValue}>
+                                        (Post Close: {formatUsd(postCloseBalance)})
                                     </span>
                                 </div>
                                 {isAdvancedMode && (
                                     <div className={styles.advancedStats}>
                                         <div className={styles.statRow}>
                                             <span>Cash Balance:</span>
-                                            <span>${balance.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                                            <span>{formatUsd(balance)}</span>
+                                        </div>
+                                        <div className={styles.statRow}>
+                                            <span>Money Spent:</span>
+                                            <span>{formatUsd(moneySpent)}</span>
+                                        </div>
+                                        <div className={styles.statRow}>
+                                            <span>Post Close Balance:</span>
+                                            <span>{formatUsd(postCloseBalance)}</span>
                                         </div>
                                         <div className={styles.statRow}>
                                             <span>Total Return:</span>
-                                            <span className={(balance + unrealizedPnL - startBalance) >= 0 ? styles.green : styles.red}>
-                                                {((balance + unrealizedPnL - startBalance) / startBalance * 100).toFixed(2)}%
+                                            <span className={totalPnL >= 0 ? styles.green : styles.red}>
+                                                {pnlPct.toFixed(2)}%
                                             </span>
                                         </div>
                                     </div>
@@ -405,8 +437,8 @@ export default function MobilePage() {
                                 <div className={styles.emptyPosition}>No active positions</div>
                             ) : (
                                 <ul className={styles.positionList}>
-                                    {positions.map(pos => {
-                                        const currentPrice = prices[pos.symbol] || (pos.symbol === 'BTCUSDT' ? btcPrice : 0);
+                                    {positionSnapshots.map(pos => {
+                                        const currentPrice = pos.markPrice;
                                         return (
                                             <li
                                                 key={pos.id}
@@ -426,9 +458,8 @@ export default function MobilePage() {
                                                         <span className={styles.posSymbol}>{pos.symbol}</span>
                                                         {/* In Simple Mode, show PnL on the right of header if possible, or just below */}
                                                         {!isAdvancedMode && currentPrice > 0 && (
-                                                            <span className={`${styles.simplePnl} ${((currentPrice - pos.entryPrice) * (pos.side === 'LONG' ? 1 : -1)) >= 0 ? styles.green : styles.red}`} style={{ marginLeft: 'auto', fontWeight: 600 }}>
-                                                                {((currentPrice - pos.entryPrice) * pos.quantity * (pos.side === 'LONG' ? 1 : -1) >= 0 ? '+' : '')}
-                                                                ${((currentPrice - pos.entryPrice) * pos.quantity * (pos.side === 'LONG' ? 1 : -1)).toFixed(2)}
+                                                            <span className={`${styles.simplePnl} ${pos.unrealizedPnL >= 0 ? styles.green : styles.red}`} style={{ marginLeft: 'auto', fontWeight: 600 }}>
+                                                                {pos.unrealizedPnL >= 0 ? '+' : '-'}{formatUsd(Math.abs(pos.unrealizedPnL))}
                                                             </span>
                                                         )}
                                                     </div>
@@ -443,6 +474,10 @@ export default function MobilePage() {
                                                                 <div className={styles.posDetail}>
                                                                     <span className={styles.posDetailLabel}>Qty</span>
                                                                     <span>{pos.quantity.toFixed(6)}</span>
+                                                                </div>
+                                                                <div className={styles.posDetail}>
+                                                                    <span className={styles.posDetailLabel}>Spent</span>
+                                                                    <span>{formatUsd(pos.moneySpent)}</span>
                                                                 </div>
                                                                 {pos.stopLoss && (
                                                                     <div className={styles.posDetail}>
@@ -467,9 +502,8 @@ export default function MobilePage() {
                                                         {isAdvancedMode && currentPrice > 0 && (
                                                             <div className={styles.posDetail} style={{ width: '100%', marginTop: 4, display: 'flex', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 4 }}>
                                                                 <span className={styles.posDetailLabel}>Live P&L</span>
-                                                                <span className={((currentPrice - pos.entryPrice) * (pos.side === 'LONG' ? 1 : -1)) >= 0 ? styles.green : styles.red}>
-                                                                    {((currentPrice - pos.entryPrice) * pos.quantity * (pos.side === 'LONG' ? 1 : -1) >= 0 ? '+' : '')}
-                                                                    ${((currentPrice - pos.entryPrice) * pos.quantity * (pos.side === 'LONG' ? 1 : -1)).toFixed(2)}
+                                                                <span className={pos.unrealizedPnL >= 0 ? styles.green : styles.red}>
+                                                                    {pos.unrealizedPnL >= 0 ? '+' : '-'}{formatUsd(Math.abs(pos.unrealizedPnL))}
                                                                     {' ('}
                                                                     {((currentPrice - pos.entryPrice) / pos.entryPrice * 100 * (pos.side === 'LONG' ? 1 : -1) >= 0 ? '+' : '')}
                                                                     {((currentPrice - pos.entryPrice) / pos.entryPrice * 100 * (pos.side === 'LONG' ? 1 : -1)).toFixed(2)}%)
@@ -600,6 +634,9 @@ export default function MobilePage() {
                                                     {' → '}
                                                     ${trade.exitPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                                                 </span>
+                                                <span className={styles.tradeSpent}>
+                                                    Money Spent: {formatUsd(trade.entryPrice * trade.quantity)}
+                                                </span>
                                             </div>
                                             <div className={styles.tradeRight}>
                                                 <div className={`${styles.tradePnl} ${trade.pnl >= 0 ? styles.green : styles.red}`}>
@@ -619,7 +656,7 @@ export default function MobilePage() {
             </div>
 
             <div className={styles.footer}>
-                <a href="/" className={styles.footerLink}>Open full dashboard →</a>
+                <Link href="/" className={styles.footerLink}>Open full dashboard →</Link>
             </div>
         </main>
     );
