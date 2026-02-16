@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getChatMessages, saveChatMessage } from '@/db';
-import { resolveUserId } from '@/lib/chatIdentity';
+import { resolveChatIdentity, setChatIdentityCookie } from '@/lib/chatIdentity';
 
 const ID_PATTERN = /^[a-z0-9]{6}$/;
 
 export async function GET(req: NextRequest) {
-    const me = resolveUserId(req);
+    const identity = await resolveChatIdentity(req);
+    const me = identity.userId;
     const { searchParams } = new URL(req.url);
     const withId = (searchParams.get('with') || '').trim().toLowerCase();
 
@@ -15,17 +16,26 @@ export async function GET(req: NextRequest) {
 
     try {
         const messages = await getChatMessages(me, withId, 200);
-        return NextResponse.json({ me, withId, messages });
+        const res = NextResponse.json({ me, withId, messages });
+        if (identity.shouldSetCookie) {
+            setChatIdentityCookie(res, identity.deviceId);
+        }
+        return res;
     } catch (err: unknown) {
-        return NextResponse.json(
+        const res = NextResponse.json(
             { error: err instanceof Error ? err.message : 'Internal server error' },
             { status: 500 }
         );
+        if (identity.shouldSetCookie) {
+            setChatIdentityCookie(res, identity.deviceId);
+        }
+        return res;
     }
 }
 
 export async function POST(req: NextRequest) {
-    const me = resolveUserId(req);
+    const identity = await resolveChatIdentity(req);
+    const me = identity.userId;
 
     try {
         const body = await req.json() as { toId?: string; message?: string };
@@ -41,11 +51,19 @@ export async function POST(req: NextRequest) {
         }
 
         await saveChatMessage(me, toId, message);
-        return NextResponse.json({ ok: true });
+        const res = NextResponse.json({ ok: true });
+        if (identity.shouldSetCookie) {
+            setChatIdentityCookie(res, identity.deviceId);
+        }
+        return res;
     } catch (err: unknown) {
-        return NextResponse.json(
+        const res = NextResponse.json(
             { error: err instanceof Error ? err.message : 'Internal server error' },
             { status: 500 }
         );
+        if (identity.shouldSetCookie) {
+            setChatIdentityCookie(res, identity.deviceId);
+        }
+        return res;
     }
 }

@@ -425,6 +425,39 @@ export async function deletePushSubscription(endpoint: string): Promise<void> {
     });
 }
 
+// ─── Chat Identities ──────────────────────────────────────────
+
+export interface ChatIdentityRecord {
+    deviceId: string;
+    userId: string;
+}
+
+export async function getChatIdentityByDevice(deviceId: string): Promise<ChatIdentityRecord | null> {
+    const db = await qs();
+    const rs = await db.execute({
+        sql: `SELECT device_id, user_id FROM chat_identities WHERE device_id = ? LIMIT 1`,
+        args: [deviceId],
+    });
+
+    const row = rs.rows[0];
+    if (!row) return null;
+
+    return {
+        deviceId: row.device_id as string,
+        userId: row.user_id as string,
+    };
+}
+
+export async function createChatIdentity(deviceId: string, userId: string): Promise<ChatIdentityRecord | null> {
+    const db = await qs();
+    await db.execute({
+        sql: `INSERT OR IGNORE INTO chat_identities (device_id, user_id) VALUES (?, ?)`,
+        args: [deviceId, userId],
+    });
+
+    return getChatIdentityByDevice(deviceId);
+}
+
 // ─── Chat Messages ────────────────────────────────────────────
 
 export interface ChatMessageRecord {

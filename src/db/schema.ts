@@ -149,6 +149,18 @@ export async function ensureSchema(): Promise<void> {
 
         await client.execute(`CREATE INDEX IF NOT EXISTS idx_chat_from_to_ts ON chat_messages(from_id, to_id, timestamp DESC)`);
         await client.execute(`CREATE INDEX IF NOT EXISTS idx_chat_to_from_ts ON chat_messages(to_id, from_id, timestamp DESC)`);
+
+        // ─── Chat Identities ─────────────────────────────────────────────
+
+        await client.execute(`
+            CREATE TABLE IF NOT EXISTS chat_identities (
+                device_id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL UNIQUE,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        `);
+
+        await client.execute(`CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_identities_user_id ON chat_identities(user_id)`);
     })();
 
     return _initPromise;
