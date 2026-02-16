@@ -543,7 +543,7 @@
     }
 
     .chatFabOpen {
-        bottom: calc(50px + env(safe-area-inset-bottom, 0px));
+        bottom: calc(62px + env(safe-area-inset-bottom, 0px));
         right: 16px;
         top: auto;
     }
