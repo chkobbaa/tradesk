@@ -149,6 +149,7 @@ export default function ChatWidget() {
         if (!open) return;
 
         const onPointerDown = (event: PointerEvent) => {
+            if (previewAttachment) return;
             const target = event.target as Node;
             if (panelRef.current?.contains(target)) return;
             if (fabRef.current?.contains(target)) return;
@@ -168,7 +169,7 @@ export default function ChatWidget() {
             document.removeEventListener('pointerdown', onPointerDown);
             document.removeEventListener('keydown', onKeyDown);
         };
-    }, [open]);
+    }, [open, previewAttachment]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
