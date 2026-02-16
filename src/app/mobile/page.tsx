@@ -424,33 +424,47 @@ export default function MobilePage() {
                                                             {pos.side}
                                                         </span>
                                                         <span className={styles.posSymbol}>{pos.symbol}</span>
+                                                        {/* In Simple Mode, show PnL on the right of header if possible, or just below */}
+                                                        {!isAdvancedMode && currentPrice > 0 && (
+                                                            <span className={`${styles.simplePnl} ${((currentPrice - pos.entryPrice) * (pos.side === 'LONG' ? 1 : -1)) >= 0 ? styles.green : styles.red}`} style={{ marginLeft: 'auto', fontWeight: 600 }}>
+                                                                {((currentPrice - pos.entryPrice) * pos.quantity * (pos.side === 'LONG' ? 1 : -1) >= 0 ? '+' : '')}
+                                                                ${((currentPrice - pos.entryPrice) * pos.quantity * (pos.side === 'LONG' ? 1 : -1)).toFixed(2)}
+                                                            </span>
+                                                        )}
                                                     </div>
+
                                                     <div className={styles.posDetails}>
-                                                        <div className={styles.posDetail}>
-                                                            <span className={styles.posDetailLabel}>Entry</span>
-                                                            <span>${pos.entryPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-                                                        </div>
-                                                        <div className={styles.posDetail}>
-                                                            <span className={styles.posDetailLabel}>Qty</span>
-                                                            <span>{pos.quantity.toFixed(6)}</span>
-                                                        </div>
-                                                        {pos.stopLoss && (
-                                                            <div className={styles.posDetail}>
-                                                                <span className={styles.posDetailLabel}>SL</span>
-                                                                <span className={styles.red}>${pos.stopLoss.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-                                                            </div>
+                                                        {isAdvancedMode && (
+                                                            <>
+                                                                <div className={styles.posDetail}>
+                                                                    <span className={styles.posDetailLabel}>Entry</span>
+                                                                    <span>${pos.entryPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                                                                </div>
+                                                                <div className={styles.posDetail}>
+                                                                    <span className={styles.posDetailLabel}>Qty</span>
+                                                                    <span>{pos.quantity.toFixed(6)}</span>
+                                                                </div>
+                                                                {pos.stopLoss && (
+                                                                    <div className={styles.posDetail}>
+                                                                        <span className={styles.posDetailLabel}>SL</span>
+                                                                        <span className={styles.red}>${pos.stopLoss.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                                                                    </div>
+                                                                )}
+                                                                {pos.takeProfit && (
+                                                                    <div className={styles.posDetail}>
+                                                                        <span className={styles.posDetailLabel}>TP</span>
+                                                                        <span className={styles.green}>${pos.takeProfit.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                                                                    </div>
+                                                                )}
+                                                                <div className={styles.posDetail}>
+                                                                    <span className={styles.posDetailLabel}>Held</span>
+                                                                    <span>{timeAgo(pos.openTime)}</span>
+                                                                </div>
+                                                            </>
                                                         )}
-                                                        {pos.takeProfit && (
-                                                            <div className={styles.posDetail}>
-                                                                <span className={styles.posDetailLabel}>TP</span>
-                                                                <span className={styles.green}>${pos.takeProfit.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-                                                            </div>
-                                                        )}
-                                                        <div className={styles.posDetail}>
-                                                            <span className={styles.posDetailLabel}>Held</span>
-                                                            <span>{timeAgo(pos.openTime)}</span>
-                                                        </div>
-                                                        {currentPrice > 0 && (
+
+                                                        {/* In Advanced Mode, show detailed PnL footer */}
+                                                        {isAdvancedMode && currentPrice > 0 && (
                                                             <div className={styles.posDetail} style={{ width: '100%', marginTop: 4, display: 'flex', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 4 }}>
                                                                 <span className={styles.posDetailLabel}>Live P&L</span>
                                                                 <span className={((currentPrice - pos.entryPrice) * (pos.side === 'LONG' ? 1 : -1)) >= 0 ? styles.green : styles.red}>

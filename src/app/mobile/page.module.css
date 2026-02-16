@@ -551,6 +551,11 @@
     margin-right: 4px;
 }
 
+.simplePnl {
+    font-family: var(--font-mono);
+    font-size: 14px;
+}
+
 /* ─── Last Decision Card ──────────────────────── */
 .lastDecisionCard {
     background: var(--bg-secondary);
