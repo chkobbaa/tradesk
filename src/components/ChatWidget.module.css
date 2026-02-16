@@ -394,6 +394,15 @@
     font-family: var(--font-mono);
 }
 
+.sending {
+    opacity: 0.82;
+}
+
+.failed {
+    border-color: var(--color-bear-border);
+    background: var(--color-bear-bg);
+}
+
 .composer {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;

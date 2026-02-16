@@ -5,7 +5,11 @@ import styles from './ChatWidget.module.css';
 
 const DEVICE_STORAGE_KEY = 'tradesk-chat-device-id';
 const COOKIE_CONSENT_KEY = 'tradesk-cookie-consent';
+const THREAD_CACHE_STORAGE_PREFIX = 'tradesk-chat-thread-cache-v1';
+const LAST_CHAT_CONTACT_PREFIX = 'tradesk-chat-last-contact-v1';
 const DEVICE_ID_PATTERN = /^[a-f0-9]{32}$/;
+const CHAT_ID_PATTERN = /^[a-z0-9]{6}$/;
+const MAX_CACHED_MESSAGES = 80;
 
 function createDeviceId(): string {
     const bytes = new Uint8Array(16);
@@ -89,8 +93,41 @@ export default function ChatWidget() {
     const fabRef = useRef<HTMLButtonElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const messageCacheRef = useRef<Map<string, ChatMessage[]>>(new Map());
+    const prefetchedContactsRef = useRef<Set<string>>(new Set());
+    const cacheHydratedRef = useRef(false);
     const lastIncomingIdRef = useRef(0);
     const incomingPollInitializedRef = useRef(false);
+
+    const updateThreadCache = useCallback((contactId: string, threadMessages: ChatMessage[]) => {
+        const normalizedContactId = contactId.trim().toLowerCase();
+        if (!CHAT_ID_PATTERN.test(normalizedContactId)) {
+            return;
+        }
+
+        const persistedMessages = threadMessages
+            .filter(message => !message.optimistic && !message.failed)
+            .slice(-MAX_CACHED_MESSAGES)
+            .map(message => ({
+                id: message.id,
+                fromId: message.fromId,
+                toId: message.toId,
+                message: message.message,
+                timestamp: message.timestamp,
+            }));
+
+        messageCacheRef.current.set(normalizedContactId, persistedMessages);
+
+        if (typeof window === 'undefined' || !myId) {
+            return;
+        }
+
+        const payload: Record<string, ChatMessage[]> = {};
+        for (const [id, messagesForThread] of messageCacheRef.current.entries()) {
+            payload[id] = messagesForThread.slice(-MAX_CACHED_MESSAGES);
+        }
+
+        localStorage.setItem(`${THREAD_CACHE_STORAGE_PREFIX}:${myId}`, JSON.stringify(payload));
+    }, [myId]);
 
     const fetchWithIdentity = useCallback((url: string, init?: RequestInit) => {
         const headers = new Headers(init?.headers);
@@ -139,10 +176,22 @@ export default function ChatWidget() {
         try {
             const localDeviceId = getOrCreateDeviceId();
             setDeviceId(localDeviceId);
+
+            const lastContact = localStorage.getItem(`${LAST_CHAT_CONTACT_PREFIX}:${localDeviceId}`)?.trim().toLowerCase();
+            if (lastContact && CHAT_ID_PATTERN.test(lastContact)) {
+                setToId(lastContact);
+            }
         } catch {
             setError('Local storage is unavailable; chat ID may not persist');
         }
     }, []);
+
+    useEffect(() => {
+        if (!deviceId || typeof window === 'undefined') return;
+        const contactId = toId.trim().toLowerCase();
+        if (!CHAT_ID_PATTERN.test(contactId)) return;
+        localStorage.setItem(`${LAST_CHAT_CONTACT_PREFIX}:${deviceId}`, contactId);
+    }, [deviceId, toId]);
 
     useEffect(() => {
         if (!deviceId) return;
@@ -206,6 +255,52 @@ export default function ChatWidget() {
         return found?.displayName;
     }, [contacts, normalizedToId]);
 
+    useEffect(() => {
+        if (!myId || cacheHydratedRef.current || typeof window === 'undefined') return;
+
+        cacheHydratedRef.current = true;
+
+        try {
+            const raw = localStorage.getItem(`${THREAD_CACHE_STORAGE_PREFIX}:${myId}`);
+            if (!raw) return;
+
+            const parsed = JSON.parse(raw) as Record<string, ChatMessage[] | undefined>;
+            for (const [contactId, threadMessages] of Object.entries(parsed)) {
+                if (!CHAT_ID_PATTERN.test(contactId) || !Array.isArray(threadMessages)) {
+                    continue;
+                }
+
+                const safeMessages = threadMessages
+                    .filter(message =>
+                        typeof message?.id === 'number' &&
+                        typeof message?.fromId === 'string' &&
+                        typeof message?.toId === 'string' &&
+                        typeof message?.message === 'string' &&
+                        typeof message?.timestamp === 'number'
+                    )
+                    .slice(-MAX_CACHED_MESSAGES)
+                    .map(message => ({
+                        id: message.id,
+                        fromId: message.fromId,
+                        toId: message.toId,
+                        message: message.message,
+                        timestamp: message.timestamp,
+                    }));
+
+                messageCacheRef.current.set(contactId, safeMessages);
+            }
+
+            if (normalizedToId.length === 6) {
+                const hydrated = messageCacheRef.current.get(normalizedToId);
+                if (hydrated) {
+                    setMessages(hydrated);
+                }
+            }
+        } catch {
+            // Ignore corrupted cache payloads.
+        }
+    }, [myId, normalizedToId]);
+
     const loadMessages = useCallback(async (contactIdOverride?: string) => {
         const targetId = (contactIdOverride ?? normalizedToId).trim().toLowerCase();
         if (targetId.length !== 6) return;
@@ -220,7 +315,7 @@ export default function ChatWidget() {
             if (!Array.isArray(data.messages)) return;
 
             const nextMessages = data.messages as ChatMessage[];
-            messageCacheRef.current.set(targetId, nextMessages);
+            updateThreadCache(targetId, nextMessages);
 
             if (targetId === normalizedToId) {
                 setMessages(prev => {
@@ -246,7 +341,21 @@ export default function ChatWidget() {
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load messages');
         }
-    }, [fetchWithIdentity, myId, normalizedToId]);
+    }, [fetchWithIdentity, myId, normalizedToId, updateThreadCache]);
+
+    useEffect(() => {
+        if (contacts.length === 0) return;
+
+        const topContacts = contacts.slice(0, 5);
+        for (const contact of topContacts) {
+            if (prefetchedContactsRef.current.has(contact.contactId)) {
+                continue;
+            }
+
+            prefetchedContactsRef.current.add(contact.contactId);
+            void loadMessages(contact.contactId);
+        }
+    }, [contacts, loadMessages]);
 
     useEffect(() => {
         if (normalizedToId.length !== 6) {
@@ -392,7 +501,7 @@ export default function ChatWidget() {
         setText('');
         setMessages(prev => {
             const next = [...prev, optimisticMessage];
-            messageCacheRef.current.set(normalizedToId, next.filter(m => !m.optimistic && !m.failed));
+            updateThreadCache(normalizedToId, next);
             return next;
         });
 
@@ -766,11 +875,11 @@ export default function ChatWidget() {
                             <div className={styles.empty}>No messages yet. Send a message or share a file to begin.</div>
                         ) : (
                             messages.map((m) => {
-                                const mine = m.fromId === myId;
+                                const mine = m.fromId === myId || (!!m.optimistic && m.toId === normalizedToId);
                                 return (
                                     <div
                                         key={m.id}
-                                        className={`${styles.bubble} ${mine ? styles.mine : styles.theirs}`}
+                                        className={`${styles.bubble} ${mine ? styles.mine : styles.theirs} ${m.optimistic ? styles.sending : ''} ${m.failed ? styles.failed : ''}`}
                                     >
                                         <div>{m.message}</div>
                                         {m.attachment && (
@@ -802,7 +911,8 @@ export default function ChatWidget() {
                                             </div>
                                         )}
                                         <span className={styles.meta}>
-                                            {mine ? 'You' : m.fromId} · {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            {mine ? 'You' : m.fromId}
+                                            {m.optimistic ? ' · Sending…' : m.failed ? ' · Failed to send' : ` · ${new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
                                         </span>
                                     </div>
                                 );
