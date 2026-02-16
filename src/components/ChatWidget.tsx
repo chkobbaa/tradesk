@@ -96,6 +96,7 @@ export default function ChatWidget() {
     const messageCacheRef = useRef<Map<string, ChatMessage[]>>(new Map());
     const prefetchedContactsRef = useRef<Set<string>>(new Set());
     const cacheHydratedRef = useRef(false);
+    const activeContactRef = useRef('');
     const stickToBottomRef = useRef(true);
     const lastIncomingIdRef = useRef(0);
     const incomingPollInitializedRef = useRef(false);
@@ -258,6 +259,10 @@ export default function ChatWidget() {
     }, [contacts, normalizedToId]);
 
     useEffect(() => {
+        activeContactRef.current = normalizedToId;
+    }, [normalizedToId]);
+
+    useEffect(() => {
         if (!myId || cacheHydratedRef.current || typeof window === 'undefined') return;
 
         cacheHydratedRef.current = true;
@@ -319,7 +324,7 @@ export default function ChatWidget() {
             const nextMessages = data.messages as ChatMessage[];
             updateThreadCache(targetId, nextMessages);
 
-            if (targetId === normalizedToId) {
+            if (targetId === activeContactRef.current) {
                 setMessages(prev => {
                     const localPending = prev.filter(m =>
                         (m.optimistic || m.failed) &&
