@@ -102,55 +102,16 @@ function detectStandaloneDisplayMode(): boolean {
     return navigatorStandalone || mediaStandalone;
 }
 
-/* ── WAV encoder: turns raw PCM Float32 samples into a valid .wav Blob ── */
-function writeWavString(view: DataView, offset: number, str: string) {
-    for (let i = 0; i < str.length; i++) {
-        view.setUint8(offset + i, str.charCodeAt(i));
-    }
-}
-
-function encodeWavBlob(chunks: Float32Array[], sampleRate: number): Blob {
-    let totalSamples = 0;
-    for (const c of chunks) totalSamples += c.length;
-
-    const numChannels = 1;
-    const bytesPerSample = 2;
-    const dataLength = totalSamples * bytesPerSample;
-    const buffer = new ArrayBuffer(44 + dataLength);
-    const view = new DataView(buffer);
-
-    writeWavString(view, 0, 'RIFF');
-    view.setUint32(4, 36 + dataLength, true);
-    writeWavString(view, 8, 'WAVE');
-    writeWavString(view, 12, 'fmt ');
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true);
-    view.setUint16(22, numChannels, true);
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, sampleRate * numChannels * bytesPerSample, true);
-    view.setUint16(32, numChannels * bytesPerSample, true);
-    view.setUint16(34, bytesPerSample * 8, true);
-    writeWavString(view, 36, 'data');
-    view.setUint32(40, dataLength, true);
-
-    let pos = 44;
-    for (const chunk of chunks) {
-        for (let i = 0; i < chunk.length; i++) {
-            const s = Math.max(-1, Math.min(1, chunk[i]));
-            view.setInt16(pos, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
-            pos += 2;
-        }
-    }
-
-    return new Blob([buffer], { type: 'audio/wav' });
-}
-
-interface WavRecorderState {
+/*
+ * AudioContext bridge state for iOS recording.
+ * We pipe mic → AudioContext → MediaStreamDestination → MediaRecorder.
+ * This keeps the iOS audio session alive (AudioContext is an active consumer)
+ * and gives MediaRecorder a clean, stable stream to record from.
+ */
+interface AudioBridgeState {
     audioContext: AudioContext;
     source: MediaStreamAudioSourceNode;
-    processor: ScriptProcessorNode;
-    gain: GainNode;
-    chunks: Float32Array[];
+    destination: MediaStreamAudioDestinationNode;
 }
 
 export default function ChatWidget() {
@@ -186,7 +147,7 @@ export default function ChatWidget() {
     const mediaStreamRef = useRef<MediaStream | null>(null);
     const voiceChunksRef = useRef<Blob[]>([]);
     const voiceRecordingStartedAtRef = useRef(0);
-    const wavRecorderRef = useRef<WavRecorderState | null>(null);
+    const audioBridgeRef = useRef<AudioBridgeState | null>(null);
     const loadInFlightRef = useRef<Map<string, boolean>>(new Map());
     const audioElementsRef = useRef<Map<number, HTMLAudioElement>>(new Map());
     const seekingAudioIdRef = useRef<number | null>(null);
@@ -698,49 +659,20 @@ export default function ChatWidget() {
         }
     }, []);
 
-    const stopWavRecording = useCallback(async () => {
-        const wav = wavRecorderRef.current;
-        if (!wav) return;
-        wavRecorderRef.current = null;
-
-        // Disconnect audio graph
-        try { wav.processor.disconnect(); } catch { /* */ }
-        try { wav.source.disconnect(); } catch { /* */ }
-        try { wav.gain.disconnect(); } catch { /* */ }
-
-        const sampleRate = wav.audioContext.sampleRate;
-        try { await wav.audioContext.close(); } catch { /* */ }
-
-        releaseStream();
-        setRecordingVoice(false);
-        setRecordingMs(0);
-
-        if (wav.chunks.length === 0) {
-            setError('No audio captured — hold the record button a bit longer.');
-            return;
-        }
-
-        const blob = encodeWavBlob(wav.chunks, sampleRate);
-        if (blob.size <= 44) { // 44 = WAV header only, no actual audio
-            setError('No audio captured — hold the record button a bit longer.');
-            return;
-        }
-
-        const file = new File([blob], `voice-${Date.now()}.wav`, { type: 'audio/wav' });
-        await uploadFile(file);
-    }, [releaseStream]);
+    const teardownAudioBridge = useCallback(() => {
+        const bridge = audioBridgeRef.current;
+        if (!bridge) return;
+        audioBridgeRef.current = null;
+        try { bridge.source.disconnect(); } catch { /* */ }
+        try { void bridge.audioContext.close(); } catch { /* */ }
+    }, []);
 
     const stopVoiceRecording = useCallback(() => {
-        // WAV mode (Apple devices)
-        if (wavRecorderRef.current) {
-            void stopWavRecording();
-            return;
-        }
-        // MediaRecorder mode (other browsers)
         const recorder = mediaRecorderRef.current;
         if (!recorder || recorder.state === 'inactive') return;
+        // recorder.onstop handles cleanup, upload, and teardownAudioBridge
         recorder.stop();
-    }, [stopWavRecording]);
+    }, []);
 
     useEffect(() => {
         if (!recordingVoice) {
@@ -784,61 +716,49 @@ export default function ChatWidget() {
 
             const isApple = detectAppleWebKitClient() || detectStandaloneDisplayMode();
 
-            if (isApple) {
-                // ── Apple path: bypass MediaRecorder entirely ──
-                // Use AudioContext + ScriptProcessorNode to capture raw PCM.
-                // Encode as WAV on stop. 100% reliable on iOS Safari & PWA.
-                const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-                // Do NOT specify sampleRate — iOS rejects non-native rates silently.
-                // We'll use whatever the device gives us (usually 48000 or 44100).
-                const audioContext = new AudioCtx();
+            // ── Determine recording stream ──
+            // On Apple devices, MediaRecorder on a raw getUserMedia stream is
+            // unreliable (mic indicator dies, zero-byte blobs). The fix is to
+            // pipe through an AudioContext → MediaStreamDestination first.
+            // This keeps the iOS audio session alive.
+            let recordStream = stream;
 
-                // iOS starts AudioContext in "suspended" state — must explicitly resume.
-                if (audioContext.state === 'suspended') {
-                    await audioContext.resume();
-                }
+            if (isApple) {
+                const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+                const audioContext = new AudioCtx();
+                // resume() must happen during the synchronous part of the user
+                // gesture. We already called getUserMedia above (which is async)
+                // but iOS still considers us "in gesture" if the microtask
+                // chain is unbroken. Force resume immediately:
+                await audioContext.resume();
 
                 const source = audioContext.createMediaStreamSource(stream);
-                const processor = audioContext.createScriptProcessor(4096, 1, 1);
-                const gain = audioContext.createGain();
-                // Use a near-zero gain instead of 0 — iOS detects true silence
-                // and kills the audio session (mic indicator disappears after ~2s).
-                gain.gain.value = 0.00001;
+                const destination = audioContext.createMediaStreamDestination();
+                source.connect(destination);
 
-                const pcmChunks: Float32Array[] = [];
-                processor.onaudioprocess = (e) => {
-                    const input = e.inputBuffer.getChannelData(0);
-                    pcmChunks.push(new Float32Array(input));
-                };
+                recordStream = destination.stream;
+                audioBridgeRef.current = { audioContext, source, destination };
+            }
 
-                source.connect(processor);
-                processor.connect(gain);
-                gain.connect(audioContext.destination);
-
-                // Re-resume if iOS suspends the context mid-recording
-                audioContext.addEventListener('statechange', () => {
-                    if (audioContext.state === 'suspended' && wavRecorderRef.current) {
-                        void audioContext.resume();
-                    }
-                });
-
-                wavRecorderRef.current = { audioContext, source, processor, gain, chunks: pcmChunks };
-            } else {
-                // ── Non-Apple path: standard MediaRecorder ──
+            {
+                // ── Universal MediaRecorder path ──
                 if (typeof MediaRecorder === 'undefined') {
                     setError('Voice recording is not supported on this device');
+                    teardownAudioBridge();
                     releaseStream();
                     return;
                 }
 
-                const mimePreference = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'];
+                const mimePreference = isApple
+                    ? ['audio/mp4', 'audio/aac', 'audio/webm']
+                    : ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'];
                 const chosenMime = mimePreference.find(t =>
                     typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(t),
                 );
 
                 const recorder = chosenMime
-                    ? new MediaRecorder(stream, { mimeType: chosenMime })
-                    : new MediaRecorder(stream);
+                    ? new MediaRecorder(recordStream, { mimeType: chosenMime })
+                    : new MediaRecorder(recordStream);
 
                 mediaRecorderRef.current = recorder;
                 voiceChunksRef.current = [];
@@ -850,6 +770,7 @@ export default function ChatWidget() {
                 };
 
                 recorder.onerror = () => {
+                    teardownAudioBridge();
                     releaseStream();
                     mediaRecorderRef.current = null;
                     setRecordingVoice(false);
@@ -858,6 +779,7 @@ export default function ChatWidget() {
                 };
 
                 recorder.onstop = async () => {
+                    teardownAudioBridge();
                     releaseStream();
                     mediaRecorderRef.current = null;
                     setRecordingVoice(false);
@@ -866,7 +788,7 @@ export default function ChatWidget() {
                     const chunks = voiceChunksRef.current;
                     voiceChunksRef.current = [];
 
-                    const resolvedMime = recorder.mimeType || 'audio/webm';
+                    const resolvedMime = recorder.mimeType || 'audio/mp4';
                     const blob = new Blob(chunks, { type: resolvedMime });
 
                     if (blob.size === 0) {
@@ -876,13 +798,19 @@ export default function ChatWidget() {
 
                     const ext = resolvedMime.includes('mp4') ? '.m4a'
                         : resolvedMime.includes('ogg') ? '.ogg'
-                        : '.webm';
+                        : resolvedMime.includes('webm') ? '.webm'
+                        : '.m4a';
 
                     const file = new File([blob], `voice-${Date.now()}${ext}`, { type: resolvedMime });
                     await uploadFile(file);
                 };
 
-                recorder.start(250);
+                // No timeslice on Apple — one blob on stop is the only reliable mode.
+                if (isApple) {
+                    recorder.start();
+                } else {
+                    recorder.start(250);
+                }
             }
 
             voiceRecordingStartedAtRef.current = Date.now();
@@ -890,14 +818,14 @@ export default function ChatWidget() {
             setRecordingMs(0);
             setError(null);
         } catch {
+            teardownAudioBridge();
             releaseStream();
             mediaRecorderRef.current = null;
-            wavRecorderRef.current = null;
             setRecordingVoice(false);
             setRecordingMs(0);
             setError('Unable to access microphone. Check permissions and try again.');
         }
-    }, [releaseStream, normalizedToId, recordingVoice, uploading]);
+    }, [releaseStream, teardownAudioBridge, normalizedToId, recordingVoice, uploading]);
 
     useEffect(() => {
         return () => {
@@ -907,14 +835,12 @@ export default function ChatWidget() {
             }
             mediaRecorderRef.current = null;
 
-            // Cleanup WAV recorder
-            const wav = wavRecorderRef.current;
-            if (wav) {
-                try { wav.processor.disconnect(); } catch { /* */ }
-                try { wav.source.disconnect(); } catch { /* */ }
-                try { wav.gain.disconnect(); } catch { /* */ }
-                try { void wav.audioContext.close(); } catch { /* */ }
-                wavRecorderRef.current = null;
+            // Cleanup AudioContext bridge
+            const bridge = audioBridgeRef.current;
+            if (bridge) {
+                try { bridge.source.disconnect(); } catch { /* */ }
+                try { void bridge.audioContext.close(); } catch { /* */ }
+                audioBridgeRef.current = null;
             }
 
             // Cleanup mic stream
