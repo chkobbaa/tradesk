@@ -87,6 +87,21 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
     return output;
 }
 
+function detectAppleWebKitClient(): boolean {
+    if (typeof navigator === 'undefined') return false;
+    const ua = navigator.userAgent || '';
+    const isAppleDevice = /iPad|iPhone|iPod|Macintosh/i.test(ua);
+    const isWebKit = /AppleWebKit/i.test(ua) && !/Chrome|CriOS|Edg|FxiOS/i.test(ua);
+    return isAppleDevice && isWebKit;
+}
+
+function detectStandaloneDisplayMode(): boolean {
+    if (typeof window === 'undefined') return false;
+    const navigatorStandalone = (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+    const mediaStandalone = typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches;
+    return navigatorStandalone || mediaStandalone;
+}
+
 export default function ChatWidget() {
     const [open, setOpen] = useState(false);
     const [myId, setMyId] = useState('');
@@ -681,12 +696,22 @@ export default function ChatWidget() {
         try {
             const stream = await getOrCreateMicrophoneStream();
 
-            const preferredMimeTypes = [
-                'audio/webm;codecs=opus',
-                'audio/webm',
-                'audio/mp4',
-                'audio/ogg',
-            ];
+            const useAppleCompatibleOrder = detectAppleWebKitClient() || detectStandaloneDisplayMode();
+            const preferredMimeTypes = useAppleCompatibleOrder
+                ? [
+                    'audio/mp4',
+                    'audio/mp4;codecs=mp4a.40.2',
+                    'audio/aac',
+                    'audio/mpeg',
+                    'audio/wav',
+                    'audio/ogg',
+                ]
+                : [
+                    'audio/webm;codecs=opus',
+                    'audio/webm',
+                    'audio/mp4',
+                    'audio/ogg',
+                ];
 
             const selectedMimeType = preferredMimeTypes.find(type =>
                 typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(type)
