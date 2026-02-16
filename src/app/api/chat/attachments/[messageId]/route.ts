@@ -26,6 +26,39 @@ function encodeFileName(fileName: string): string {
     return encodeURIComponent(fileName).replace(/['()*]/g, ch => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`);
 }
 
+function parseRangeHeader(rangeHeader: string, totalLength: number): { start: number; end: number } | null {
+    const match = /^bytes=(\d*)-(\d*)$/i.exec(rangeHeader.trim());
+    if (!match) return null;
+
+    const startRaw = match[1];
+    const endRaw = match[2];
+
+    if (!startRaw && !endRaw) return null;
+
+    let start = startRaw ? Number(startRaw) : NaN;
+    let end = endRaw ? Number(endRaw) : NaN;
+
+    if (!Number.isNaN(start) && start < 0) return null;
+    if (!Number.isNaN(end) && end < 0) return null;
+
+    if (Number.isNaN(start)) {
+        const suffixLength = Number(endRaw);
+        if (!Number.isFinite(suffixLength) || suffixLength <= 0) return null;
+        start = Math.max(0, totalLength - suffixLength);
+        end = totalLength - 1;
+    } else if (Number.isNaN(end)) {
+        end = totalLength - 1;
+    }
+
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+    if (start >= totalLength) return null;
+
+    end = Math.min(end, totalLength - 1);
+    if (end < start) return null;
+
+    return { start, end };
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ messageId: string }> }) {
     let identity: Awaited<ReturnType<typeof resolveChatIdentity>> | null = null;
 
@@ -56,11 +89,46 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ mess
             return NextResponse.json({ error: 'Attachment payload is invalid' }, { status: 500 });
         }
 
-        const response = new NextResponse(Buffer.from(parsed.bytes), {
+        const payload = Buffer.from(parsed.bytes);
+        const totalLength = payload.byteLength;
+        const rangeHeader = req.headers.get('range');
+
+        if (rangeHeader) {
+            const range = parseRangeHeader(rangeHeader, totalLength);
+            if (!range) {
+                return new NextResponse(null, {
+                    status: 416,
+                    headers: {
+                        'Content-Range': `bytes */${totalLength}`,
+                    },
+                });
+            }
+
+            const partial = payload.subarray(range.start, range.end + 1);
+            const partialResponse = new NextResponse(partial, {
+                status: 206,
+                headers: {
+                    'Content-Type': attachment.mimeType || parsed.mimeType,
+                    'Content-Length': String(partial.byteLength),
+                    'Content-Range': `bytes ${range.start}-${range.end}/${totalLength}`,
+                    'Content-Disposition': `inline; filename*=UTF-8''${encodeFileName(attachment.fileName)}`,
+                    'Cache-Control': 'private, max-age=31536000, immutable',
+                    'Accept-Ranges': 'bytes',
+                },
+            });
+
+            if (identity.shouldSetCookie) {
+                setChatIdentityCookie(partialResponse, identity.deviceId);
+            }
+
+            return partialResponse;
+        }
+
+        const response = new NextResponse(payload, {
             status: 200,
             headers: {
                 'Content-Type': attachment.mimeType || parsed.mimeType,
-                'Content-Length': String(parsed.bytes.byteLength),
+                'Content-Length': String(totalLength),
                 'Content-Disposition': `inline; filename*=UTF-8''${encodeFileName(attachment.fileName)}`,
                 'Cache-Control': 'private, max-age=31536000, immutable',
                 'Accept-Ranges': 'bytes',

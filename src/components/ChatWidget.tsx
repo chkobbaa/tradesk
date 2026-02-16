@@ -645,7 +645,16 @@ export default function ChatWidget() {
         if (!recorder) return;
 
         if (recorder.state !== 'inactive') {
-            recorder.stop();
+            try {
+                recorder.requestData();
+            } catch {
+                // Some implementations may not support requestData in current state.
+            }
+            window.setTimeout(() => {
+                if (recorder.state !== 'inactive') {
+                    recorder.stop();
+                }
+            }, 120);
         }
     }, []);
 
@@ -743,7 +752,10 @@ export default function ChatWidget() {
                 setRecordingVoice(false);
                 setRecordingMs(0);
 
-                if (chunks.length === 0) return;
+                if (chunks.length === 0) {
+                    setError('No audio captured. Please hold record a bit longer and try again.');
+                    return;
+                }
 
                 const mimeType = recorder.mimeType || 'audio/webm';
                 const blob = new Blob(chunks, { type: mimeType });
